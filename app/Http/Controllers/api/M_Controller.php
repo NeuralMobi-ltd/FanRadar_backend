@@ -100,7 +100,7 @@ class M_Controller extends Controller
             'first_name' => 'required|string',
             'last_name' => 'required|string',
 
-            'email' => 'required|email|unique:users,email',            'role' => 'in:user,admin',
+            'email' => 'required|email|unique:users,email',   'role' => 'in:user,admin',
             'email' => 'required|email|unique:users,email',
             'role' => 'required|in:user,admin',
             'password' => 'required|string|min:6',
@@ -156,7 +156,7 @@ class M_Controller extends Controller
     {
         $categories = \App\Models\Category::select('id', 'name')->get();
         return response()->json(['success' => true, 'data' => $categories]);
-    } 
+    }
 
     /**
      * g. Get subcategories (id, cat_id, name)
@@ -322,14 +322,14 @@ class M_Controller extends Controller
     {
         $post = \App\Models\Post::find($id);
         if (!$post) return response()->json(['success' => false, 'error' => 'Post not found'], 404);
-        
+
         $updateData = $request->only(['title', 'content', 'category_id', 'subcategory_id']);
         if ($request->has('media')) {
             $updateData['media'] = $request->media;
         }
-        
+
         $post->update($updateData);
-        
+
         // Mettre à jour les tags si fournis
         if ($request->has('tags') && is_array($request->tags)) {
             $post->tags()->detach(); // Supprimer tous les tags existants
@@ -338,7 +338,7 @@ class M_Controller extends Controller
                 $post->tags()->attach($tag->id);
             }
         }
-        
+
         return response()->json(['success' => true, 'data' => $post]);
     }
 

@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 
 class AuthentificationController extends Controller
 {
@@ -38,6 +39,17 @@ class AuthentificationController extends Controller
                     $roleNames = $user->getRoleNames();
                 }
 
+                // Générer l'URL complète de l'image de profil
+                $imageUrl = null;
+                if ($user->profile_image && $user->profile_image !== 'default.png') {
+                    if (Storage::disk('public')->exists('profile/' . $user->profile_image)) {
+                        $imageUrl = asset('storage/profile/' . $user->profile_image);
+                    }
+                }
+                if (!$imageUrl) {
+                    $imageUrl = asset('storage/profile/default.png');
+                }
+
                 return response()->json([
                     'message' => 'Connexion réussie.',
                     'user' => [
@@ -45,7 +57,7 @@ class AuthentificationController extends Controller
                         'first_name' => $user->first_name,
                         'last_name' => $user->last_name,
                         'email' => $user->email,
-                        'profile_image' => $user->profile_image,
+                        'profile_image' => $imageUrl,
                         'role' => $roleNames->first() ?? null,
                         'permissions' => $permissionNames->toArray(),
                     ],
@@ -72,10 +84,12 @@ class AuthentificationController extends Controller
                 }
 
                 // Traitement de l'image si elle est envoyée
-                /*$profileImagePath = null;
+                $profileImageName = 'default.png';
                 if ($request->hasFile('profile_image')) {
-                    $profileImagePath = $request->file('profile_image')->store('profile_images', 'public');
-                }*/
+                    $image = $request->file('profile_image');
+                    $profileImageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+                    $image->storeAs('profile', $profileImageName, 'public');
+                }
 
                 // Création de l'utilisateur
                 $user = User::create([
@@ -83,7 +97,7 @@ class AuthentificationController extends Controller
                     'last_name' => $request->last_name,
                     'email' => $request->email,
                     'password' => Hash::make($request->password),
-                    'profile_image' => $profileImagePath ?? 'default.png', // ou null si tu préfères
+                    'profile_image' => $profileImageName,
                 ]);
 
                 $user->assignRole('user');// Assign a default role 'user'
@@ -95,6 +109,9 @@ class AuthentificationController extends Controller
                 $roleNames = $user->getRoleNames();
                 $permissionNames = $user->getPermissionNames();
 
+                // Générer l'URL complète de l'image de profil pour la réponse
+                $imageUrl = asset('storage/profile/' . $profileImageName);
+
                 return response()->json([
                     'message' => 'Inscription réussie.',
                     'user' => [
@@ -102,7 +119,7 @@ class AuthentificationController extends Controller
                         'first_name' => $user->first_name,
                         'last_name' => $user->last_name,
                         'email' => $user->email,
-                        'profile_image' => $user->profile_image,
+                        'profile_image' => $imageUrl,
                         'role' => $roleNames->first() ?? null,
                         'permissions' => $permissionNames->toArray(),
                     ],
