@@ -133,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 
+
 Route::get('Y/users/{userId}/followers', [PersonnaliseController::class, 'getUserFollowers']);
 Route::get('Y/users/{userId}/following', [PersonnaliseController::class, 'getUserFollowing']);
 

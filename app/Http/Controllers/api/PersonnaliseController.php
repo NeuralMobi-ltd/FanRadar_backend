@@ -560,6 +560,7 @@ class PersonnaliseController extends Controller
 
         $formattedPosts = collect($posts->items())->map(function ($post) {
             return [
+                'id' => $post->id,
                 'description' => $post->description,
                 'content_status' => $post->content_status,
                 'schedule_at' => $post->schedule_at,
