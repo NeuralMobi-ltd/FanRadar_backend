@@ -896,6 +896,35 @@ public function getSavedPosts(Request $request)
             ]
         ]);
     }
+
+    /**
+     * Récupérer les sous-catégories d'une catégorie
+     * Route: GET /api/Y/categories/{category_id}/subcategories
+     */
+    public function getCategorySubcategories($category_id)
+    {
+        $category = Category::find($category_id);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        $subcategories = \App\Models\SubCategory::where('category_id', $category_id)->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'category' => [
+                    'id' => $category->id,
+                    'name' => $category->name
+                ],
+                'subcategories' => $subcategories
+            ]
+        ]);
+    }
+
      /**
      * Récupérer tous les fandoms
      * Route: GET /api/fandoms
@@ -1343,6 +1372,12 @@ public function getSavedPosts(Request $request)
 
         return response()->json(['success' => true, 'message' => 'Fandom mis à jour avec succès', 'data' => ['fandom' => $fandom]], 200);
     }
+
+    public function getAllCategories() {
+        $categories = Category::all();
+        return response()->json($categories);
+    }
+
 
     // ====================
     // HASHTAGS

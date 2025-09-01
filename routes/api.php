@@ -153,7 +153,8 @@ Route::get('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'getFa
 // Get members (users) for a fandom
 Route::get('Y/fandoms/{fandom_id}/members', [PersonnaliseController::class, 'getFandomMembers']);
 
-
+Route::get('Y/categories', [PersonnaliseController::class, 'getAllCategories']);
+Route::get('Y/categories/{category_id}/subcategories', [PersonnaliseController::class, 'getCategorySubcategories']);
 
 // ====================
 // MAIN CONTENT / FEED
