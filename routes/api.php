@@ -128,6 +128,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Allow authenticated user to join a fandom by id
     Route::post('Y/fandoms/{fandom_id}/join', [PersonnaliseController::class, 'joinFandom']);
+    
+    // Allow authenticated user to leave a fandom by id
+    Route::delete('Y/fandoms/{fandom_id}/leave', [PersonnaliseController::class, 'leaveFandom']);
 
     Route::post('Y/fandoms', [PersonnaliseController::class, 'createFandom']);
     // Update an existing fandom by id

@@ -1178,6 +1178,50 @@ class PersonnaliseController extends Controller
     }
 
     /**
+     * Permettre à un utilisateur authentifié de quitter un fandom
+     * Route: DELETE /api/Y/fandoms/{fandom_id}/leave
+     */
+    public function leaveFandom($fandom_id, Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        // Résoudre le fandom par id
+        $fandom = \App\Models\Fandom::find((int) $fandom_id);
+
+        if (!$fandom) {
+            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+        }
+
+        // Vérifier si l'utilisateur est membre du fandom
+        $existing = \App\Models\Member::where('user_id', $user->id)->where('fandom_id', $fandom->id)->first();
+        if (!$existing) {
+            return response()->json(['success' => false, 'message' => 'Vous n\'êtes pas membre de ce fandom'], 404);
+        }
+
+        // Empêcher l'admin de quitter son propre fandom s'il est le seul admin
+        if ($existing->role === 'admin') {
+            $adminCount = \App\Models\Member::where('fandom_id', $fandom->id)
+                ->where('role', 'admin')
+                ->count();
+
+            if ($adminCount === 1) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Impossible de quitter le fandom. Vous êtes le seul administrateur. Transférez d\'abord les droits d\'administration à un autre membre.'
+                ], 403);
+            }
+        }
+
+        // Supprimer l'enregistrement de member
+        $existing->delete();
+
+        return response()->json(['success' => true, 'message' => 'Vous avez quitté le fandom avec succès.'], 200);
+    }
+
+    /**
      * Obtenir les posts d'un fandom
      * Route: GET /api/fandoms/{fandom_id}/posts
      */
