@@ -12,8 +12,9 @@ class Fandom extends Model
     protected $fillable = [
         'name',
         'description',
-    'subcategory_id',
-    'cover_image',
+        'subcategory_id',
+        'cover_image',
+        'logo_image',
     ];
 
     public function subcategory()

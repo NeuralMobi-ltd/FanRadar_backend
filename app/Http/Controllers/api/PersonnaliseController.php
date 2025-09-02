@@ -1250,6 +1250,30 @@ public function getSavedPosts(Request $request)
                     }
                 }
             }],
+            // logo_image validation
+            'logo_image' => ['nullable', function ($attribute, $value, $fail) use ($request) {
+                // If a file was uploaded under this key, validate it here
+                if ($request->hasFile('logo_image')) {
+                    $file = $request->file('logo_image');
+                    if (!$file->isValid()) {
+                        return $fail('Le fichier '.$attribute.' est invalide.');
+                    }
+                    $ext = strtolower($file->getClientOriginalExtension());
+                    $allowed = ['jpg','jpeg','png','gif','webp'];
+                    if (!in_array($ext, $allowed)) {
+                        return $fail('Le fichier '.$attribute.' doit être une image (jpg,jpeg,png,gif,webp).');
+                    }
+                    // max size ~8MB
+                    if ($file->getSize() > 8192 * 1024) {
+                        return $fail('Le fichier '.$attribute.' est trop volumineux.');
+                    }
+                } else {
+                    // if not a file, allow null or a valid URL string
+                    if (!empty($value) && !filter_var($value, FILTER_VALIDATE_URL)) {
+                        return $fail('Le champ '.$attribute.' doit être une URL valide ou un fichier image.');
+                    }
+                }
+            }],
         ]);
 
         if ($validator->fails()) {
@@ -1270,11 +1294,24 @@ public function getSavedPosts(Request $request)
             $data['cover_image'] = $request->input('cover_image');
         }
 
+        // Handle logo_image upload
+        if ($request->hasFile('logo_image') && $request->file('logo_image')->isValid()) {
+            $path = $request->file('logo_image')->store('fandom_logo_image', 'public');
+            // store a web-accessible path like 'storage/...'
+            $data['logo_image'] = 'storage/' . $path;
+        }
+
+        // If caller provided a URL string in logo_image (and no file), keep it as-is
+        if (empty($data['logo_image']) && $request->filled('logo_image')) {
+            $data['logo_image'] = $request->input('logo_image');
+        }
+
         $fandom = \App\Models\Fandom::create([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'subcategory_id' => $data['subcategory_id'] ?? null,
             'cover_image' => $data['cover_image'] ?? null,
+            'logo_image' => $data['logo_image'] ?? null,
         ]);
 
         if (!$fandom) {
@@ -1341,6 +1378,20 @@ public function getSavedPosts(Request $request)
                     }
                 }
             }],
+            'logo_image' => ['nullable', function ($attribute, $value, $fail) use ($request) {
+                if ($request->hasFile('logo_image')) {
+                    $file = $request->file('logo_image');
+                    if (!$file->isValid()) return $fail('Invalid file.');
+                    $ext = strtolower($file->getClientOriginalExtension());
+                    $allowed = ['jpg','jpeg','png','gif','webp'];
+                    if (!in_array($ext, $allowed)) return $fail('Invalid image type.');
+                    if ($file->getSize() > 8192 * 1024) return $fail('File too large.');
+                } else {
+                    if (!empty($value) && !filter_var($value, FILTER_VALIDATE_URL)) {
+                        return $fail('The logo_image must be a valid URL or file.');
+                    }
+                }
+            }],
         ]);
 
         if ($validator->fails()) {
@@ -1366,6 +1417,25 @@ public function getSavedPosts(Request $request)
         // If cover_image provided as URL string and not a file, use it
         if (empty($data['cover_image']) && $request->filled('cover_image')) {
             $data['cover_image'] = $request->input('cover_image');
+        }
+
+        // Handle uploaded logo image: store and delete old if present and was stored locally
+        if ($request->hasFile('logo_image') && $request->file('logo_image')->isValid()) {
+            $path = $request->file('logo_image')->store('fandom_logo_image', 'public');
+            $newUrl = 'storage/' . $path;
+            // if previous logo image was a storage path, delete the old file
+            if ($fandom->logo_image && str_starts_with($fandom->logo_image, 'storage/')) {
+                $oldPath = substr($fandom->logo_image, strlen('storage/'));
+                if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
+            $data['logo_image'] = $newUrl;
+        }
+
+        // If logo_image provided as URL string and not a file, use it
+        if (empty($data['logo_image']) && $request->filled('logo_image')) {
+            $data['logo_image'] = $request->input('logo_image');
         }
 
         $fandom->update($data);

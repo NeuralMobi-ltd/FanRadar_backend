@@ -169,8 +169,39 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserPreferredCategory::class);
     }
-        public function members()
+
+    public function members()
     {
         return $this->hasMany(\App\Models\Member::class);
+    }
+
+    // Relation directe avec les saved_posts
+    public function savedPostsRelation()
+    {
+        return $this->hasMany(SavedPost::class);
+    }
+
+    // Sauvegarder un post
+    public function savePost($postId)
+    {
+        return $this->savedPosts()->attach($postId);
+    }
+
+    // Retirer un post des sauvegardés
+    public function unsavePost($postId)
+    {
+        return $this->savedPosts()->detach($postId);
+    }
+
+    // Vérifier si un post est sauvegardé
+    public function hasSavedPost($postId)
+    {
+        return $this->savedPosts()->where('post_id', $postId)->exists();
+    }
+
+    // Basculer l'état de sauvegarde d'un post
+    public function toggleSavePost($postId)
+    {
+        return $this->savedPosts()->toggle($postId);
     }
 }

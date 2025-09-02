@@ -100,6 +100,30 @@ class Post extends Model
     {
         return $this->belongsTo(Fandom::class, 'fandom_id');
     }
+
+    // Relation avec les utilisateurs qui ont sauvegardé ce post
+    public function savedByUsers()
+    {
+        return $this->belongsToMany(User::class, 'saved_posts')->withTimestamps();
+    }
+
+    // Relation directe avec les saved_posts
+    public function savedPosts()
+    {
+        return $this->hasMany(SavedPost::class);
+    }
+
+    // Vérifier si un post est sauvegardé par un utilisateur spécifique
+    public function isSavedBy($userId)
+    {
+        return $this->savedByUsers()->where('user_id', $userId)->exists();
+    }
+
+    // Compter le nombre de fois que ce post a été sauvegardé
+    public function savesCount()
+    {
+        return $this->savedByUsers()->count();
+    }
 }
 
 
