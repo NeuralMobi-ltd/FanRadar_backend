@@ -2514,4 +2514,238 @@ class PersonnaliseController extends Controller
      * Route: POST /api/posts/{postId}/toggle-save
      */
 
+    /**
+     * Rechercher des utilisateurs par nom avec pagination
+     * Route: GET /api/search/users
+     */
+    public function searchUsers(Request $request)
+    {
+        $query = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 10);
+
+        // Valider les paramètres
+        if (empty($query)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Search query is required'
+            ], 400);
+        }
+
+        if ($perPage > 50) {
+            $perPage = 50; // Limiter à 50 résultats par page maximum
+        }
+
+        // Recherche dans les utilisateurs par first_name, last_name ou email
+        $users = \App\Models\User::where(function($q) use ($query) {
+                $q->where('first_name', 'LIKE', "%{$query}%")
+                  ->orWhere('last_name', 'LIKE', "%{$query}%")
+                  ->orWhere('email', 'LIKE', "%{$query}%");
+            })
+            ->select('id', 'first_name', 'last_name', 'email', 'profile_image', 'bio', 'created_at')
+            ->orderBy('first_name', 'asc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Formater les données pour inclure le nom complet
+        $formattedUsers = $users->getCollection()->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'full_name' => $user->first_name . ' ' . $user->last_name,
+                'email' => $user->email,
+                'profile_image' => $user->profile_image,
+                'bio' => $user->bio,
+                'created_at' => $user->created_at
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'search_query' => $query,
+                'users' => $formattedUsers,
+                'pagination' => [
+                    'current_page' => $users->currentPage(),
+                    'total_pages' => $users->lastPage(),
+                    'total_items' => $users->total(),
+                    'per_page' => $users->perPage(),
+                    'has_more' => $users->hasMorePages(),
+                    'from' => $users->firstItem(),
+                    'to' => $users->lastItem()
+                ]
+            ]
+        ], 200);
+    }
+
+    /**
+     * Rechercher des posts par tags, description ou sous-catégorie avec pagination
+     * Route: GET /api/Y/search/posts
+     */
+    public function searchPosts(Request $request)
+    {
+        $query = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 10);
+
+        // Valider les paramètres
+        if (empty($query)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Search query is required'
+            ], 400);
+        }
+
+        if ($perPage > 50) {
+            $perPage = 50; // Limiter à 50 résultats par page maximum
+        }
+
+        // Recherche dans les posts par description, tags ou sous-catégorie
+        $posts = \App\Models\Post::where(function($q) use ($query) {
+                // Recherche dans la description du post
+                $q->where('description', 'LIKE', "%{$query}%")
+                  // Recherche dans les tags associés au post
+                  ->orWhereHas('tags', function($tagQuery) use ($query) {
+                      $tagQuery->where('tag_name', 'LIKE', "%{$query}%");
+                  })
+                  // Recherche dans la sous-catégorie du post
+                  ->orWhereHas('subcategory', function($subQuery) use ($query) {
+                      $subQuery->where('name', 'LIKE', "%{$query}%");
+                  });
+            })
+            ->where('content_status', 'published') // Seulement les posts publiés
+            ->with(['user:id,first_name,last_name,email,profile_image', 'medias', 'tags', 'subcategory:id,name'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Formater les données des posts
+        $formattedPosts = $posts->getCollection()->map(function ($post) {
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at,
+                'user' => $post->user ? [
+                    'id' => $post->user->id,
+                    'first_name' => $post->user->first_name,
+                    'last_name' => $post->user->last_name,
+                    'full_name' => $post->user->first_name . ' ' . $post->user->last_name,
+                    'email' => $post->user->email,
+                    'profile_image' => $post->user->profile_image
+                ] : null,
+                'media' => $post->medias ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'subcategory' => $post->subcategory ? [
+                    'id' => $post->subcategory->id,
+                    'name' => $post->subcategory->name
+                ] : null,
+                'likes_count' => $post->favorites ? $post->favorites()->count() : 0,
+                'comments_count' => $post->comments ? $post->comments()->count() : 0
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'search_query' => $query,
+                'posts' => $formattedPosts,
+                'pagination' => [
+                    'current_page' => $posts->currentPage(),
+                    'total_pages' => $posts->lastPage(),
+                    'total_items' => $posts->total(),
+                    'per_page' => $posts->perPage(),
+                    'has_more' => $posts->hasMorePages(),
+                    'from' => $posts->firstItem(),
+                    'to' => $posts->lastItem()
+                ]
+            ]
+        ], 200);
+    }
+
+    /**
+     * Rechercher des fandoms avec pagination
+     * Route: GET /api/Y/search/fandom
+     */
+    public function searchFandomsPaginated(Request $request)
+    {
+        $query = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 10);
+
+        // Valider les paramètres
+        if (empty($query)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Search query is required'
+            ], 400);
+        }
+
+        if ($perPage > 50) {
+            $perPage = 50; // Limiter à 50 résultats par page maximum
+        }
+
+        $user = Auth::user();
+
+        // Recherche dans les fandoms par nom, description
+        $fandoms = \App\Models\Fandom::where(function($q) use ($query) {
+                $q->where('name', 'LIKE', "%{$query}%")
+                  ->orWhere('description', 'LIKE', "%{$query}%");
+            })
+            ->with(['subcategory:id,name'])
+            ->withCount(['posts', 'members'])
+            ->orderBy('name', 'asc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
+        $userMemberships = [];
+        if ($user) {
+            $fandomIds = $fandoms->pluck('id')->toArray();
+            $memberships = \App\Models\Member::where('user_id', $user->id)
+                ->whereIn('fandom_id', $fandomIds)
+                ->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
+
+        // Formater les données des fandoms
+        $formattedFandoms = $fandoms->getCollection()->map(function ($fandom) use ($userMemberships) {
+            return [
+                'id' => $fandom->id,
+                'name' => $fandom->name,
+                'description' => $fandom->description,
+                'cover_image' => $fandom->cover_image,
+                'logo_image' => $fandom->logo_image,
+                'subcategory_id' => $fandom->subcategory_id,
+                'subcategory' => $fandom->subcategory ? [
+                    'id' => $fandom->subcategory->id,
+                    'name' => $fandom->subcategory->name
+                ] : null,
+                'posts_count' => $fandom->posts_count ?? 0,
+                'members_count' => $fandom->members_count ?? 0,
+                'is_member' => isset($userMemberships[$fandom->id]),
+                'member_role' => $userMemberships[$fandom->id] ?? null,
+                'created_at' => $fandom->created_at
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'search_query' => $query,
+                'fandoms' => $formattedFandoms,
+                'pagination' => [
+                    'current_page' => $fandoms->currentPage(),
+                    'total_pages' => $fandoms->lastPage(),
+                    'total_items' => $fandoms->total(),
+                    'per_page' => $fandoms->perPage(),
+                    'has_more' => $fandoms->hasMorePages(),
+                    'from' => $fandoms->firstItem(),
+                    'to' => $fandoms->lastItem()
+                ]
+            ]
+        ], 200);
+    }
+
 }

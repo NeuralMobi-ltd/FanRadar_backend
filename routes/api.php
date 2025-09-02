@@ -176,6 +176,8 @@ Route::get('Y/fandoms', [PersonnaliseController::class, 'getFandoms']);
 Route::get('Y/fandoms/trending', [PersonnaliseController::class, 'getTrendingFandoms']);
 // Search fandoms by query: /api/fandoms/search?q=QUERY
 Route::get('Y/fandoms/search', [PersonnaliseController::class, 'searchFandoms']);
+
+
 // Get posts for a fandom
 Route::get('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'getFandomPosts']);
 // Get members (users) for a fandom
@@ -183,6 +185,14 @@ Route::get('Y/fandoms/{fandom_id}/members', [PersonnaliseController::class, 'get
 
 Route::get('Y/categories', [PersonnaliseController::class, 'getAllCategories']);
 Route::get('Y/categories/{category_id}/subcategories', [PersonnaliseController::class, 'getCategorySubcategories']);
+
+// Search users by name with pagination
+Route::get('Y/search/users', [PersonnaliseController::class, 'searchUsers']);
+// Search posts by tags, description or subcategory with pagination
+Route::get('Y/search/posts', [PersonnaliseController::class, 'searchPosts']);
+// Search fandoms by name and description with pagination
+Route::get('Y/search/fandom', [PersonnaliseController::class, 'searchFandomsPaginated']);
+
 
 // ====================
 // MAIN CONTENT / FEED
