@@ -128,9 +128,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Allow authenticated user to join a fandom by id
     Route::post('Y/fandoms/{fandom_id}/join', [PersonnaliseController::class, 'joinFandom']);
-    
+
     // Allow authenticated user to leave a fandom by id
     Route::delete('Y/fandoms/{fandom_id}/leave', [PersonnaliseController::class, 'leaveFandom']);
+
+
 
     Route::post('Y/fandoms', [PersonnaliseController::class, 'createFandom']);
     // Update an existing fandom by id
@@ -141,6 +143,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('Y/posts/savedPosts', [\App\Http\Controllers\Api\PersonnaliseController::class, 'getSavedPosts']);
 
     Route::get('Y/users/my-fandoms', [PersonnaliseController::class, 'getMyFandoms']);
+     // Allow admin to change member role in fandom
+    Route::put('Y/fandoms/{fandom_id}/members/{user_id}/role', [PersonnaliseController::class, 'changeMemberRole']);
+    
+    // Allow members to add a post to a fandom
+    Route::post('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'addPostToFandom']);
 
 });
 

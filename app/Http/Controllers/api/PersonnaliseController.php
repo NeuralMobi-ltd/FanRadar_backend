@@ -988,16 +988,31 @@ class PersonnaliseController extends Controller
      */
     public function getFandoms()
     {
-    // Charger la relation subcategory et le nombre de posts/members pour éviter les N+1
-    $fandoms = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->get();
+        $user = Auth::user();
+
+        // Charger la relation subcategory et le nombre de posts/members pour éviter les N+1
+        $fandoms = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->get();
+
+        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
+        $userMemberships = [];
+        if ($user) {
+            $memberships = \App\Models\Member::where('user_id', $user->id)->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
 
         // Retourner tous les champs du modèle Fandom (sans les lister manuellement)
         // on convertit chaque modèle en tableau puis on ajoute les compteurs et une sous-catégorie minimale
-        $formatted = $fandoms->map(function ($f) {
+        $formatted = $fandoms->map(function ($f) use ($userMemberships) {
             $attrs = $f->toArray();
             // s'assurer que les compteurs sont présents
             $attrs['posts_count'] = $f->posts_count ?? 0;
             $attrs['members_count'] = $f->members_count ?? 0;
+
+            // Ajouter les informations de membership
+            $attrs['is_member'] = isset($userMemberships[$f->id]);
+            $attrs['member_role'] = $userMemberships[$f->id] ?? null;
 
             // réduire la sous-catégorie à id/name pour éviter de renvoyer trop de données
             if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
@@ -1020,16 +1035,31 @@ class PersonnaliseController extends Controller
 
     public function getTrendingFandoms()
     {
-    // Charger la relation subcategory et le nombre de posts/members pour éviter les N+1
-    $fandoms = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->get();
+        $user = Auth::user();
+
+        // Charger la relation subcategory et le nombre de posts/members pour éviter les N+1
+        $fandoms = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->get();
+
+        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
+        $userMemberships = [];
+        if ($user) {
+            $memberships = \App\Models\Member::where('user_id', $user->id)->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
 
         // Retourner tous les champs du modèle Fandom (sans les lister manuellement)
         // on convertit chaque modèle en tableau puis on ajoute les compteurs et une sous-catégorie minimale
-        $formatted = $fandoms->map(function ($f) {
+        $formatted = $fandoms->map(function ($f) use ($userMemberships) {
             $attrs = $f->toArray();
             // s'assurer que les compteurs sont présents
             $attrs['posts_count'] = $f->posts_count ?? 0;
             $attrs['members_count'] = $f->members_count ?? 0;
+
+            // Ajouter les informations de membership
+            $attrs['is_member'] = isset($userMemberships[$f->id]);
+            $attrs['member_role'] = $userMemberships[$f->id] ?? null;
 
             // réduire la sous-catégorie à id/name pour éviter de renvoyer trop de données
             if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
@@ -1056,6 +1086,7 @@ class PersonnaliseController extends Controller
      */
     public function searchFandoms(Request $request)
     {
+        $user = Auth::user();
         $q = $request->get('q', '');
 
         // base query: eager load subcategory and include counts
@@ -1071,10 +1102,24 @@ class PersonnaliseController extends Controller
 
         $fandoms = $query->get();
 
-        $formatted = $fandoms->map(function ($f) {
+        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
+        $userMemberships = [];
+        if ($user) {
+            $memberships = \App\Models\Member::where('user_id', $user->id)->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
+
+        $formatted = $fandoms->map(function ($f) use ($userMemberships) {
             $attrs = $f->toArray();
             $attrs['posts_count'] = $f->posts_count ?? 0;
             $attrs['members_count'] = $f->members_count ?? 0;
+
+            // Ajouter les informations de membership
+            $attrs['is_member'] = isset($userMemberships[$f->id]);
+            $attrs['member_role'] = $userMemberships[$f->id] ?? null;
+
             if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
                 $attrs['subcategory'] = [
                     'id' => $attrs['subcategory']['id'] ?? null,
@@ -1219,6 +1264,232 @@ class PersonnaliseController extends Controller
         $existing->delete();
 
         return response()->json(['success' => true, 'message' => 'Vous avez quitté le fandom avec succès.'], 200);
+    }
+
+    /**
+     * Permettre à un administrateur de changer le rôle d'un membre dans un fandom
+     * Route: PUT /api/Y/fandoms/{fandom_id}/members/{user_id}/role
+     */
+    public function changeMemberRole($fandom_id, $user_id, Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        // Validation des données
+        $request->validate([
+            'role' => 'required|string|in:member,moderator,admin'
+        ]);
+
+        $newRole = $request->input('role');
+
+        // Résoudre le fandom par id
+        $fandom = \App\Models\Fandom::find((int) $fandom_id);
+        if (!$fandom) {
+            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+        }
+
+        // Vérifier que l'utilisateur actuel est administrateur du fandom
+        $currentUserMembership = \App\Models\Member::where('user_id', $user->id)
+            ->where('fandom_id', $fandom->id)
+            ->where('role', 'admin')
+            ->first();
+
+        if (!$currentUserMembership) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied. Only administrators can change member roles.'
+            ], 403);
+        }
+
+        // Vérifier que l'utilisateur cible existe et est membre du fandom
+        $targetUser = \App\Models\User::find((int) $user_id);
+        if (!$targetUser) {
+            return response()->json(['success' => false, 'message' => 'Target user not found'], 404);
+        }
+
+        $targetMembership = \App\Models\Member::where('user_id', $targetUser->id)
+            ->where('fandom_id', $fandom->id)
+            ->first();
+
+        if (!$targetMembership) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Target user is not a member of this fandom'
+            ], 404);
+        }
+
+        // Empêcher l'admin de se rétrograder s'il est le seul admin
+        if ($targetUser->id === $user->id && $targetMembership->role === 'admin' && $newRole !== 'admin') {
+            $adminCount = \App\Models\Member::where('fandom_id', $fandom->id)
+                ->where('role', 'admin')
+                ->count();
+
+            if ($adminCount === 1) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot demote yourself. You are the only administrator. Promote another member to admin first.'
+                ], 403);
+            }
+        }
+
+        // Mettre à jour le rôle
+        $oldRole = $targetMembership->role;
+        $targetMembership->role = $newRole;
+        $targetMembership->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Member role updated successfully from '{$oldRole}' to '{$newRole}'",
+            'data' => [
+                'user_id' => $targetUser->id,
+                'username' => $targetUser->name,
+                'old_role' => $oldRole,
+                'new_role' => $newRole,
+                'fandom_id' => $fandom->id,
+                'fandom_name' => $fandom->name
+            ]
+        ], 200);
+    }
+
+    /**
+     * Permettre aux membres d'un fandom d'ajouter un post dans ce fandom
+     * Route: POST /api/Y/fandoms/{fandom_id}/posts
+     */
+    public function addPostToFandom($fandom_id, Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        // Validation des données
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'content' => 'required|string',
+            'schedule_at' => 'nullable|date',
+            'description' => 'nullable|string',
+            'content_status' => 'required|in:draft,published,archived',
+            'medias' => 'nullable|array',
+            'medias.*' => 'file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
+            'tags' => 'nullable|array',
+            'tags.*' => 'string|max:255',
+            'image' => 'nullable|string', // URL ou chemin de l'image
+        ]);
+
+        // Résoudre le fandom par id
+        $fandom = \App\Models\Fandom::find((int) $fandom_id);
+        if (!$fandom) {
+            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+        }
+
+        // Vérifier que l'utilisateur est membre du fandom
+        $membership = \App\Models\Member::where('user_id', $user->id)
+            ->where('fandom_id', $fandom->id)
+            ->first();
+
+        if (!$membership) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied. You must be a member of this fandom to post.'
+            ], 403);
+        }
+
+        // Créer le post
+        $post = new \App\Models\Post();
+        $post->title = $request->input('title');
+        $post->content = $request->input('content');
+        $post->user_id = $user->id;
+        $post->fandom_id = $fandom->id;
+        $post->content_status = $request->input('content_status');
+
+        if ($request->has('description') && !empty($request->input('description'))) {
+            $post->description = $request->input('description');
+        }
+
+        if ($request->has('schedule_at') && !empty($request->input('schedule_at'))) {
+            $post->schedule_at = $request->input('schedule_at');
+        }
+
+        if ($request->has('image') && !empty($request->input('image'))) {
+            $post->image = $request->input('image');
+        }
+
+        $post->save();
+
+        // Gérer les médias uploadés
+        if ($request->has('medias') && is_array($request->file('medias'))) {
+            foreach ($request->file('medias') as $mediaFile) {
+                // Stocker le fichier
+                $path = $mediaFile->store('medias', 'public');
+
+                // Déterminer le type de média
+                $mimeType = $mediaFile->getMimeType();
+                $type = 'document'; // par défaut
+                if (str_starts_with($mimeType, 'image/')) {
+                    $type = 'image';
+                } elseif (str_starts_with($mimeType, 'video/')) {
+                    $type = 'video';
+                } elseif (str_starts_with($mimeType, 'audio/')) {
+                    $type = 'audio';
+                }
+
+                // Créer l'enregistrement média
+                $media = new \App\Models\Media();
+                $media->url = $path;
+                $media->type = $type;
+                $media->post_id = $post->id;
+                $media->save();
+            }
+        }
+
+        // Ajouter les tags si fournis
+        if ($request->has('tags') && is_array($request->input('tags'))) {
+            $tags = $request->input('tags');
+            foreach ($tags as $tagName) {
+                if (!empty(trim($tagName))) {
+                    // Trouver ou créer le tag
+                    $tag = \App\Models\Tag::firstOrCreate(['name' => trim($tagName)]);
+
+                    // Attacher le tag au post (éviter les doublons)
+                    if (!$post->tags()->where('tag_id', $tag->id)->exists()) {
+                        $post->tags()->attach($tag->id);
+                    }
+                }
+            }
+        }
+
+        // Charger les relations pour la réponse
+        $post->load(['user:id,name,email', 'fandom:id,name', 'tags:id,name', 'medias:id,url,type,post_id']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Post added to fandom successfully',
+            'data' => [
+                'post' => [
+                    'id' => $post->id,
+                    'title' => $post->title,
+                    'content' => $post->content,
+                    'description' => $post->description,
+                    'content_status' => $post->content_status,
+                    'schedule_at' => $post->schedule_at,
+                    'image' => $post->image,
+                    'created_at' => $post->created_at,
+                    'updated_at' => $post->updated_at,
+                    'user' => $post->user,
+                    'fandom' => $post->fandom,
+                    'tags' => $post->tags->pluck('name')->toArray(),
+                    'medias' => $post->medias->map(function($media) {
+                        return [
+                            'id' => $media->id,
+                            'url' => asset('storage/' . $media->url),
+                            'type' => $media->type
+                        ];
+                    })->toArray()
+                ]
+            ]
+        ], 201);
     }
 
     /**
