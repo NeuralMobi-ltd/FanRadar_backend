@@ -588,6 +588,84 @@ class PersonnaliseController extends Controller
         ]);
     }
 
+    /**
+     * Récupérer le profil complet d'un utilisateur par son ID
+     * Route: GET /api/Y/users/{userId}/profile
+     */
+    public function getUserProfileById($userId, Request $request)
+    {
+        $user = User::find($userId);
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NOT_FOUND',
+                    'message' => 'Utilisateur non trouvé'
+                ]
+            ], 404);
+        }
+
+        // Récupérer tous les champs de l'utilisateur
+        $userProfile = $user->toArray();
+
+        // Supprimer les champs sensibles
+        unset($userProfile['password']);
+        unset($userProfile['email_verified_at']);
+        unset($userProfile['remember_token']);
+
+        // Ajouter les statistiques de follow
+        $followersCount = method_exists($user, 'followers') ? $user->followers()->count() : 0;
+        $followingCount = method_exists($user, 'following') ? $user->following()->count() : 0;
+
+        $userProfile['followers_count'] = $followersCount;
+        $userProfile['following_count'] = $followingCount;
+
+        // Récupérer les posts de l'utilisateur
+        $posts = Post::where('user_id', $userId)
+            ->with(['medias', 'tags'])
+            ->latest()
+            ->get();
+
+        $formattedPosts = $posts->map(function ($post) {
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'category_id' => $post->category_id ?? null,
+                'subcategory_id' => $post->subcategory_id ?? null,
+                'fandom_id' => $post->fandom_id ?? null,
+                'created_at' => $post->created_at,
+                'updated_at' => $post->updated_at,
+                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+            ];
+        });
+
+        $userProfile['posts'] = $formattedPosts;
+        $userProfile['posts_count'] = $posts->count();
+
+        // Vérifier si l'utilisateur authentifié suit cet utilisateur
+        $authUser = Auth::user();
+        $isFollowed = false;
+
+        if ($authUser && $authUser->id !== $userId) {
+            $isFollowed = \App\Models\Follow::where([
+                'follower_id' => $authUser->id,
+                'following_id' => $userId,
+            ])->exists();
+        }
+
+        $userProfile['is_followed'] = $isFollowed;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'user' => $userProfile
+            ]
+        ]);
+    }
+
      public function getUserFollowers($userId) {
         $user = User::find($userId);
         if (!$user) {

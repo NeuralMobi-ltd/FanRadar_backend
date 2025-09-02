@@ -110,6 +110,7 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 Route::get('Y/users/{userId}/posts', [PersonnaliseController::class, 'getUserPosts']);
+Route::get('Y/users/{userId}/profile', [PersonnaliseController::class, 'getUserProfileById']);
 
 Route::middleware('auth:sanctum')->group(function () {
 
