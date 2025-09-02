@@ -839,10 +839,67 @@ class PersonnaliseController extends Controller
     }
 
 
-public function getSavedPosts(Request $request)
-{
-  //not impl
-}
+    /**
+     * Récupérer les posts sauvegardés d'un utilisateur
+     * Route: GET /api/users/saved-posts
+     */
+    public function getSavedPosts(Request $request)
+    {
+        $user = $request->user();
+        $page = $request->get('page', 1);
+        $limit = $request->get('limit', 10);
+
+        // Récupérer les posts sauvegardés avec pagination
+        $savedPosts = $user->savedPosts()
+            ->with(['user', 'medias', 'tags'])
+            ->orderBy('saved_posts.created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts
+        $formattedPosts = $savedPosts->map(function ($post) {
+            $likeCount = method_exists($post, 'favorites') ? $post->favorites()->count() : 0;
+            $commentCount = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+            $media = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
+            $tags = method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [];
+
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content' => $post->content ?? $post->body ?? '',
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'category_id' => $post->category_id ?? null,
+                'subcategory_id' => $post->subcategory_id ?? null,
+                'fandom_id' => $post->fandom_id ?? null,
+                'media' => $media,
+                'tags' => $tags,
+                'user' => $post->user ? [
+                    'id' => $post->user->id,
+                    'first_name' => $post->user->first_name,
+                    'last_name' => $post->user->last_name,
+                    'profile_image' => $post->user->profile_image,
+                ] : null,
+                'likes_count' => $likeCount,
+                'comments_count' => $commentCount,
+                'saved_at' => $post->pivot->created_at ?? null,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts,
+                'pagination' => [
+                    'page' => $savedPosts->currentPage(),
+                    'limit' => $savedPosts->perPage(),
+                    'total' => $savedPosts->total(),
+                    'pages' => $savedPosts->lastPage(),
+                    'hasNext' => $savedPosts->hasMorePages()
+                ]
+            ]
+        ]);
+    }
 
 
     // ====================
@@ -1694,6 +1751,10 @@ public function getSavedPosts(Request $request)
         ]);
     }
 
+    /**
+     * Sauvegarder un post
+     * Route: POST /api/posts/{postId}/save
+     */
     public function savePost(Request $request)
     {
         $request->validate([
@@ -1701,11 +1762,76 @@ public function getSavedPosts(Request $request)
         ]);
 
         $user = $request->user();
-        $user->savedPosts()->syncWithoutDetaching($request->post_id);
+        $postId = $request->post_id;
+
+        // Vérifier si le post existe
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found',
+            ], 404);
+        }
+
+        // Vérifier si le post est déjà sauvegardé
+        if ($user->hasSavedPost($postId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post is already saved',
+            ], 409);
+        }
+
+        // Sauvegarder le post
+        $user->savedPosts()->attach($postId);
 
         return response()->json([
             'success' => true,
             'message' => 'Post saved successfully',
         ]);
     }
+
+    /**
+     * Retirer un post des sauvegardés
+     * Route: DELETE /api/posts/{postId}/unsave
+     */
+    public function unsavePost(Request $request)
+    {
+        $request->validate([
+            'post_id' => 'required|exists:posts,id',
+        ]);
+
+        $user = $request->user();
+        $postId = $request->post_id;
+
+        // Vérifier si le post existe
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found',
+            ], 404);
+        }
+
+        // Vérifier si le post est sauvegardé
+        if (!$user->hasSavedPost($postId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post is not saved',
+            ], 404);
+        }
+
+        // Retirer le post des sauvegardés
+        $user->savedPosts()->detach($postId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Post unsaved successfully',
+        ]);
+    }
+
+    /**
+     * Basculer l'état de sauvegarde d'un post (sauvegarder ou désauvegarder)
+     * Route: POST /api/posts/{postId}/toggle-save
+     */
+
 }

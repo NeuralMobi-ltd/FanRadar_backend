@@ -131,6 +131,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Update an existing fandom by id
     Route::post('Y/fandoms/{fandom_id}', [PersonnaliseController::class, 'updateFandom']);
 
+    Route::post('Y/posts/save', [\App\Http\Controllers\Api\PersonnaliseController::class, 'savePost']);
+    Route::post('Y/posts/unsave', [\App\Http\Controllers\Api\PersonnaliseController::class, 'unsavePost']);
+    Route::get('Y/posts/savedPosts', [\App\Http\Controllers\Api\PersonnaliseController::class, 'getSavedPosts']);
+
 });
 
 
@@ -183,7 +187,7 @@ Route::post('/posts/{postId}/share', [PersonnaliseController::class, 'sharePost'
 // ====================
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/posts/saved', [\App\Http\Controllers\Api\PersonnaliseController::class, 'getSavedPosts']);
-    Route::post('/saved', [\App\Http\Controllers\Api\PersonnaliseController::class, 'savePost']);
+
 });
 
 // ====================
