@@ -1267,6 +1267,75 @@ class PersonnaliseController extends Controller
             ]
         ]);
     }
+    public function getMyFandoms(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $page = $request->get('page', 1);
+        $limit = $request->get('limit', 10);
+        $role = $request->get('role'); // Filtrer par rôle si fourni
+
+        // Récupérer les membres (fandoms) de l'utilisateur avec pagination
+        $membersQuery = \App\Models\Member::where('user_id', $user->id)
+            ->with(['fandom.subcategory'])
+            ->orderBy('created_at', 'desc');
+
+        // Filtrer par rôle si fourni
+        if ($role) {
+            $membersQuery->where('role', $role);
+        }
+
+        $paginator = $membersQuery->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les données
+        $userFandoms = collect($paginator->items())->map(function ($member) {
+            $fandom = $member->fandom;
+            if (!$fandom) {
+                return null;
+            }
+
+            return [
+                'membership_id' => $member->id,
+                'role' => $member->role,
+                'joined_at' => $member->created_at ? $member->created_at->toISOString() : null,
+                'fandom' => [
+                    'id' => $fandom->id,
+                    'name' => $fandom->name,
+                    'description' => $fandom->description,
+                    'cover_image' => $fandom->cover_image,
+                    'logo_image' => $fandom->logo_image,
+                    'subcategory' => $fandom->subcategory ? [
+                        'id' => $fandom->subcategory->id,
+                        'name' => $fandom->subcategory->name,
+                    ] : null,
+                    'posts_count' => $fandom->posts()->count(),
+                    'members_count' => $fandom->members()->count(),
+                    'created_at' => $fandom->created_at ? $fandom->created_at->toISOString() : null,
+                ]
+            ];
+        })->filter()->values(); // Filtrer les nulls
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'fandoms' => $userFandoms,
+                'pagination' => [
+                    'page' => $paginator->currentPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'last_page' => $paginator->lastPage(),
+                    'has_more' => $paginator->hasMorePages(),
+                ]
+            ]
+        ]);
+    }
+
 
     /**
      * Créer un nouveau fandom

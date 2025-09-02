@@ -110,7 +110,9 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 Route::get('Y/users/{userId}/posts', [PersonnaliseController::class, 'getUserPosts']);
+
 Route::middleware('auth:sanctum')->group(function () {
+
     Route::post('Y/posts/create', [PersonnaliseController::class, 'createPost']);
     Route::post('Y/posts/{postId}/update', [PersonnaliseController::class, 'updatePost']);
     Route::delete('Y/posts/{postId}/delete', [PersonnaliseController::class, 'deletePost']);
@@ -134,6 +136,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('Y/posts/save', [\App\Http\Controllers\Api\PersonnaliseController::class, 'savePost']);
     Route::post('Y/posts/unsave', [\App\Http\Controllers\Api\PersonnaliseController::class, 'unsavePost']);
     Route::get('Y/posts/savedPosts', [\App\Http\Controllers\Api\PersonnaliseController::class, 'getSavedPosts']);
+
+    Route::get('Y/users/my-fandoms', [PersonnaliseController::class, 'getMyFandoms']);
 
 });
 
