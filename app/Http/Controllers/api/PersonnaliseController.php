@@ -209,6 +209,7 @@ class PersonnaliseController extends Controller
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
                 'email' => $user->email,
+                'bio' => $user->bio,
                 'profile_image' => $user->profile_image,
                 'background_image' => $user->background_image,
                 'date_naissance' => $user->date_naissance,
