@@ -145,9 +145,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('Y/users/my-fandoms', [PersonnaliseController::class, 'getMyFandoms']);
      // Allow admin to change member role in fandom
     Route::put('Y/fandoms/{fandom_id}/members/{user_id}/role', [PersonnaliseController::class, 'changeMemberRole']);
-    
+
     // Allow members to add a post to a fandom
     Route::post('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'addPostToFandom']);
+
+    // Allow members to update their post in a fandom
+    Route::put('Y/fandoms/{fandom_id}/posts/{post_id}', [PersonnaliseController::class, 'updatePostInFandom']);
+
+    // Allow members to delete their post in a fandom
+    Route::delete('Y/fandoms/{fandom_id}/posts/{post_id}', [PersonnaliseController::class, 'deletePostInFandom']);
 
 });
 

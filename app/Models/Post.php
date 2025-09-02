@@ -17,6 +17,7 @@ class Post extends Model
         'content_status',
         'category_id',
         'subcategory_id',
+        'fandom_id',
         'media',
     ];
 

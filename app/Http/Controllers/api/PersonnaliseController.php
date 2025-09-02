@@ -1366,29 +1366,15 @@ class PersonnaliseController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
         }
 
-        // Validation des données
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'content' => 'required|string',
-            'schedule_at' => 'nullable|date',
-            'description' => 'nullable|string',
-            'content_status' => 'required|in:draft,published,archived',
-            'medias' => 'nullable|array',
-            'medias.*' => 'file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
-            'tags' => 'nullable|array',
-            'tags.*' => 'string|max:255',
-            'image' => 'nullable|string', // URL ou chemin de l'image
-        ]);
-
-        // Résoudre le fandom par id
-        $fandom = \App\Models\Fandom::find((int) $fandom_id);
+        // Vérifier que le fandom existe
+        $fandom = \App\Models\Fandom::find($fandom_id);
         if (!$fandom) {
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
         // Vérifier que l'utilisateur est membre du fandom
         $membership = \App\Models\Member::where('user_id', $user->id)
-            ->where('fandom_id', $fandom->id)
+            ->where('fandom_id', $fandom_id)
             ->first();
 
         if (!$membership) {
@@ -1398,100 +1384,245 @@ class PersonnaliseController extends Controller
             ], 403);
         }
 
-        // Créer le post
-        $post = new \App\Models\Post();
-        $post->title = $request->input('title');
-        $post->content = $request->input('content');
-        $post->user_id = $user->id;
-        $post->fandom_id = $fandom->id;
-        $post->content_status = $request->input('content_status');
+        $validated = $request->validate([
+            'schedule_at' => 'nullable|date',
+            'description' => 'nullable|string',
+            'content_status' => 'required|in:draft,published,archived',
+            'medias' => 'nullable|array',
+            'medias.*' => 'file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
+            'tags' => 'nullable|array',
+            'tags.*' => 'string|max:255',
+        ]);
 
-        if ($request->has('description') && !empty($request->input('description'))) {
-            $post->description = $request->input('description');
-        }
+        $validated['user_id'] = $user->id;
+        $validated['fandom_id'] = $fandom_id; // Utiliser fandom_id au lieu de subcategory_id
+        $tags = $validated['tags'] ?? [];
+        unset($validated['tags']);
+        $post = Post::create($validated);
 
-        if ($request->has('schedule_at') && !empty($request->input('schedule_at'))) {
-            $post->schedule_at = $request->input('schedule_at');
-        }
-
-        if ($request->has('image') && !empty($request->input('image'))) {
-            $post->image = $request->input('image');
-        }
-
-        $post->save();
-
-        // Gérer les médias uploadés
-        if ($request->has('medias') && is_array($request->file('medias'))) {
-            foreach ($request->file('medias') as $mediaFile) {
-                // Stocker le fichier
-                $path = $mediaFile->store('medias', 'public');
-
-                // Déterminer le type de média
-                $mimeType = $mediaFile->getMimeType();
-                $type = 'document'; // par défaut
-                if (str_starts_with($mimeType, 'image/')) {
-                    $type = 'image';
-                } elseif (str_starts_with($mimeType, 'video/')) {
-                    $type = 'video';
-                } elseif (str_starts_with($mimeType, 'audio/')) {
-                    $type = 'audio';
-                }
-
-                // Créer l'enregistrement média
-                $media = new \App\Models\Media();
-                $media->url = $path;
-                $media->type = $type;
-                $media->post_id = $post->id;
-                $media->save();
-            }
-        }
-
-        // Ajouter les tags si fournis
-        if ($request->has('tags') && is_array($request->input('tags'))) {
-            $tags = $request->input('tags');
+        // Associer les tags si fournis
+        if (!empty($tags)) {
             foreach ($tags as $tagName) {
-                if (!empty(trim($tagName))) {
-                    // Trouver ou créer le tag
-                    $tag = \App\Models\Tag::firstOrCreate(['name' => trim($tagName)]);
+                $tag = \App\Models\Tag::firstOrCreate(['tag_name' => $tagName]);
+                $post->tags()->syncWithoutDetaching($tag->id);
+            }
+        }
 
-                    // Attacher le tag au post (éviter les doublons)
-                    if (!$post->tags()->where('tag_id', $tag->id)->exists()) {
-                        $post->tags()->attach($tag->id);
-                    }
+        $mediaFiles = $request->file('medias');
+        if (is_iterable($mediaFiles)) {
+            foreach ($mediaFiles as $file) {
+                $extension = strtolower($file->getClientOriginalExtension());
+
+                // Détecte type média selon extension
+                $imageExtensions = ['jpg', 'jpeg', 'png'];
+                $videoExtensions = ['mp4', 'mov'];
+
+                if (in_array($extension, $imageExtensions)) {
+                    $mediaType = 'image';
+                    $folder = 'posts/images';
+                } elseif (in_array($extension, $videoExtensions)) {
+                    $mediaType = 'video';
+                    $folder = 'posts/videos';
+                } else {
+                    // Extension non supportée (ne devrait pas arriver à cause de la validation)
+                    continue;
+                }
+
+                $path = $file->store($folder, 'public');
+
+                // Vérifier si le fichier est bien enregistré dans storage
+                if (Storage::disk('public')->exists($path)) {
+                    $post->medias()->create([
+                        'file_path' => $path,
+                        'media_type' => $mediaType,
+                    ]);
+                } else {
+                    // Optionnel: log ou ajouter un message d'erreur si besoin
+                    // \Log::error("Le fichier média n'a pas été enregistré: $path");
+                    continue;
                 }
             }
         }
 
-        // Charger les relations pour la réponse
-        $post->load(['user:id,name,email', 'fandom:id,name', 'tags:id,name', 'medias:id,url,type,post_id']);
+        // Charger les tags pour la réponse
+        $post->load('tags');
+        return response()->json([
+            'success' => true,
+            'message' => 'Post créé avec succès dans le fandom.',
+            'post' => [
+                'id' => $post->id,
+                'description' => $post->description,
+                'fandom_id' => $post->fandom_id,
+                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'createdAt' => $post->created_at ? $post->created_at->toISOString() : null
+            ]
+        ], 201);
+    }
+
+    /**
+     * Permettre aux membres d'un fandom de mettre à jour leur post
+     * Route: PUT /api/Y/fandoms/{fandom_id}/posts/{post_id}
+     */
+    public function updatePostInFandom($fandom_id, $post_id, Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        // Vérifier que le fandom existe
+        $fandom = \App\Models\Fandom::find($fandom_id);
+        if (!$fandom) {
+            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+        }
+
+        // Trouver le post
+        $post = \App\Models\Post::where('id', $post_id)
+            ->where('fandom_id', $fandom->id)
+            ->first();
+
+        if (!$post) {
+            return response()->json(['success' => false, 'message' => 'Post not found in this fandom'], 404);
+        }
+
+        // Vérifier les permissions (propriétaire du post ou admin/moderator du fandom)
+        $canEdit = false;
+        if ($post->user_id === $user->id) {
+            $canEdit = true; // Propriétaire du post
+        } else {
+            // Vérifier si l'utilisateur est admin ou moderator du fandom
+            $membership = \App\Models\Member::where('user_id', $user->id)
+                ->where('fandom_id', $fandom->id)
+                ->whereIn('role', ['admin', 'moderator'])
+                ->first();
+            if ($membership) {
+                $canEdit = true;
+            }
+        }
+
+        if (!$canEdit) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied. You can only edit your own posts or you must be an admin/moderator.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'schedule_at' => 'nullable|date',
+            'description' => 'nullable|string',
+            'content_status' => 'sometimes|in:draft,published,archived',
+
+            'tags' => 'nullable|array',
+            'tags.*' => 'string|max:255',
+        ]);
+
+        // Mettre à jour les champs fournis
+        $updateData = [];
+        if ($request->has('description')) $updateData['description'] = $request->description;
+        if ($request->has('content_status')) $updateData['content_status'] = $request->content_status;
+        if ($request->has('schedule_at')) $updateData['schedule_at'] = $request->schedule_at;
+
+        if (!empty($updateData)) {
+            $post->update($updateData);
+        }
+
+        // Gérer les tags si fournis
+        if ($request->has('tags')) {
+            $tags = $validated['tags'] ?? [];
+            // Supprimer les anciens tags
+            $post->tags()->detach();
+            // Ajouter les nouveaux tags
+            if (!empty($tags)) {
+                foreach ($tags as $tagName) {
+                    $tag = \App\Models\Tag::firstOrCreate(['tag_name' => $tagName]);
+                    $post->tags()->syncWithoutDetaching($tag->id);
+                }
+            }
+        }
+
+        // Gérer l'upload de nouveaux médias (ajoute, ne supprime pas les anciens)
+        // Charger les tags pour la réponse
+        $post->load('tags');
+        return response()->json([
+            'success' => true,
+            'message' => 'Post créé avec succès dans le fandom.',
+            'post' => [
+                'id' => $post->id,
+                'description' => $post->description,
+                'fandom_id' => $post->fandom_id,
+                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'createdAt' => $post->created_at ? $post->created_at->toISOString() : null
+            ]
+        ], 201);
+    }
+
+    /**
+     * Permettre aux membres d'un fandom de supprimer leur post
+     * Route: DELETE /api/Y/fandoms/{fandom_id}/posts/{post_id}
+     */
+    public function deletePostInFandom($fandom_id, $post_id, Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        // Résoudre le fandom par id
+        $fandom = \App\Models\Fandom::find((int) $fandom_id);
+        if (!$fandom) {
+            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+        }
+
+        // Trouver le post
+        $post = \App\Models\Post::where('id', $post_id)
+            ->where('fandom_id', $fandom->id)
+            ->first();
+
+        if (!$post) {
+            return response()->json(['success' => false, 'message' => 'Post not found in this fandom'], 404);
+        }
+
+        // Vérifier les permissions (propriétaire du post ou admin/moderator du fandom)
+        $canDelete = false;
+        if ($post->user_id === $user->id) {
+            $canDelete = true; // Propriétaire du post
+        } else {
+            // Vérifier si l'utilisateur est admin ou moderator du fandom
+            $membership = \App\Models\Member::where('user_id', $user->id)
+                ->where('fandom_id', $fandom->id)
+                ->whereIn('role', ['admin', 'moderator'])
+                ->first();
+            if ($membership) {
+                $canDelete = true;
+            }
+        }
+
+        if (!$canDelete) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied. You can only delete your own posts or you must be an admin/moderator.'
+            ], 403);
+        }
+
+        // Supprimer les médias associés
+        $post->medias()->delete();
+
+        // Supprimer les tags associés
+        $post->tags()->detach();
+
+        // Supprimer le post
+        $post->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Post added to fandom successfully',
-            'data' => [
-                'post' => [
-                    'id' => $post->id,
-                    'title' => $post->title,
-                    'content' => $post->content,
-                    'description' => $post->description,
-                    'content_status' => $post->content_status,
-                    'schedule_at' => $post->schedule_at,
-                    'image' => $post->image,
-                    'created_at' => $post->created_at,
-                    'updated_at' => $post->updated_at,
-                    'user' => $post->user,
-                    'fandom' => $post->fandom,
-                    'tags' => $post->tags->pluck('name')->toArray(),
-                    'medias' => $post->medias->map(function($media) {
-                        return [
-                            'id' => $media->id,
-                            'url' => asset('storage/' . $media->url),
-                            'type' => $media->type
-                        ];
-                    })->toArray()
-                ]
-            ]
-        ], 201);
+            'message' => 'Post deleted successfully'
+        ], 200);
     }
 
     /**
