@@ -1434,6 +1434,91 @@ class PersonnaliseController extends Controller
     }
 
     /**
+     * Supprimer un membre d'un fandom (admin seulement)
+     * Route: DELETE /api/Y/fandoms/{fandom_id}/members/{user_id}
+     */
+    public function removeMemberFromFandom($fandom_id, $user_id)
+    {
+        $admin = Auth::user();
+        if (!$admin) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        // Vérifier que le fandom existe
+        $fandom = \App\Models\Fandom::find($fandom_id);
+        if (!$fandom) {
+            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+        }
+
+        // Vérifier que l'admin est un administrateur de ce fandom
+        $adminMembership = \App\Models\Member::where('user_id', $admin->id)
+            ->where('fandom_id', $fandom_id)
+            ->where('role', 'admin')
+            ->first();
+
+        if (!$adminMembership) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied. You must be an admin of this fandom.'
+            ], 403);
+        }
+
+        // Vérifier que l'utilisateur cible existe
+        $targetUser = \App\Models\User::find($user_id);
+        if (!$targetUser) {
+            return response()->json(['success' => false, 'message' => 'User not found'], 404);
+        }
+
+        // Vérifier que l'utilisateur cible est membre du fandom
+        $targetMembership = \App\Models\Member::where('user_id', $user_id)
+            ->where('fandom_id', $fandom_id)
+            ->first();
+
+        if (!$targetMembership) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User is not a member of this fandom'
+            ], 404);
+        }
+
+        // Empêcher l'admin de se supprimer lui-même
+        if ($admin->id == $user_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You cannot remove yourself from the fandom'
+            ], 403);
+        }
+
+        // Compter le nombre d'admins restants
+        $adminCount = \App\Models\Member::where('fandom_id', $fandom_id)
+            ->where('role', 'admin')
+            ->count();
+
+        // Si l'utilisateur cible est admin et qu'il est le seul admin, empêcher la suppression
+        if ($targetMembership->role === 'admin' && $adminCount <= 1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot remove the last admin from the fandom'
+            ], 403);
+        }
+
+        // Supprimer le membre
+        $targetMembership->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Member removed successfully',
+            'data' => [
+                'removed_user_id' => $targetUser->id,
+                'removed_username' => $targetUser->name,
+                'removed_role' => $targetMembership->role,
+                'fandom_id' => $fandom->id,
+                'fandom_name' => $fandom->name
+            ]
+        ], 200);
+    }
+
+    /**
      * Permettre aux membres d'un fandom d'ajouter un post dans ce fandom
      * Route: POST /api/Y/fandoms/{fandom_id}/posts
      */

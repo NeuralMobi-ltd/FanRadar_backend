@@ -147,6 +147,9 @@ Route::middleware('auth:sanctum')->group(function () {
      // Allow admin to change member role in fandom
     Route::put('Y/fandoms/{fandom_id}/members/{user_id}/role', [PersonnaliseController::class, 'changeMemberRole']);
 
+    // Allow admin to remove member from fandom
+    Route::delete('Y/fandoms/{fandom_id}/members/{user_id}', [PersonnaliseController::class, 'removeMemberFromFandom']);
+
     // Allow members to add a post to a fandom
     Route::post('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'addPostToFandom']);
 
