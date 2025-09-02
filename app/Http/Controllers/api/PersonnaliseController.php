@@ -317,6 +317,7 @@ class PersonnaliseController extends Controller
                 'profile_image' => $user->profile_image,
                 'background_image' => $user->background_image,
                 'date_naissance' => $user->date_naissance,
+                'bio'=>$user->bio,
                 'gender' => $user->gender,
                 'preferred_categories' => $preferredCategories,
                 'role' => $roleNames->first() ?? null,
