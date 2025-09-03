@@ -55,7 +55,7 @@ class M_Controller extends Controller
                 'date_naissance' => $user->date_naissance,
                 'bio' => $user->bio,
                 'gender' => $user->gender,
-                'role' => $user->role,
+                'role' => $user->getRoleNames()->first() ?? 'user', // Premier rôle ou 'user' par défaut
                 'email_verified_at' => $user->email_verified_at,
                 'created_at' => $user->created_at,
                 'updated_at' => $user->updated_at,
@@ -91,7 +91,7 @@ class M_Controller extends Controller
                 'date_naissance' => $user->date_naissance,
                 'bio' => $user->bio,
                 'gender' => $user->gender,
-                'role' => $user->role,
+                'role' => $user->getRoleNames()->first() ?? 'user', // Premier rôle ou 'user' par défaut
                 'email_verified_at' => $user->email_verified_at,
                 'created_at' => $user->created_at,
                 'updated_at' => $user->updated_at,
@@ -134,7 +134,6 @@ class M_Controller extends Controller
             'date_naissance' => $request->date_naissance,
             'bio' => $request->bio,
             'gender' => $request->gender,
-         
         ]);
 
         // Assigner le rôle avec Spatie Permissions
@@ -144,9 +143,12 @@ class M_Controller extends Controller
             $user->assignRole('user'); // Rôle par défaut
         }
 
-        // Recharger l'utilisateur pour avoir tous les champs
+        // Recharger l'utilisateur avec les rôles
         $user = $user->fresh();
-        return response()->json(['success' => true, 'data' => $user], 201);
+        $userData = $user->toArray();
+        $userData['role'] = $user->getRoleNames()->first() ?? 'user'; // Premier rôle ou 'user' par défaut
+
+        return response()->json(['success' => true, 'data' => $userData], 201);
     }
 
     /**
@@ -159,19 +161,61 @@ class M_Controller extends Controller
         if (!$user) {
             return response()->json(['success' => false, 'error' => 'User not found'], 404);
         }
-        // Met à jour tous les champs envoyés dans la requête, sans toucher aux autres
-        $updatable = ['first_name', 'last_name', 'email', 'status', 'profile_image', 'role', 'password'];
+
+        $request->validate([
+            'email' => 'nullable|email|unique:users,email,' . $id,
+            'password' => 'nullable|string|min:6',
+            'first_name' => 'nullable|string|max:255',
+            'last_name' => 'nullable|string|max:255',
+            'date_naissance' => 'nullable|date',
+            'bio' => 'nullable|string|max:1000',
+            'gender' => 'nullable|string|in:male,female,other',
+            'role' => 'nullable|in:user,admin,writer',
+        ]);
+
+        // Met à jour tous les champs envoyés dans la requête
+        $updatable = ['first_name', 'last_name', 'email', 'profile_image', 'background_image', 'date_naissance', 'bio', 'gender'];
         foreach ($updatable as $field) {
             if ($request->has($field)) {
-                if ($field === 'password') {
-                    $user->password = bcrypt($request->password);
-                } else {
-                    $user->$field = $request->$field;
-                }
+                $user->$field = $request->$field;
             }
         }
+
+        // Gérer le mot de passe séparément
+        if ($request->has('password')) {
+            $user->password = bcrypt($request->password);
+        }
+
         $user->save();
-        return response()->json(['success' => true, 'data' => $user]);
+
+        // Mettre à jour le rôle avec Spatie Permissions si fourni
+        if ($request->has('role')) {
+            $user->syncRoles([$request->role]); // syncRoles remplace tous les rôles existants
+        }
+
+        // Recharger l'utilisateur avec les rôles
+        $user = $user->fresh();
+        $userData = $user->toArray();
+        $userData['role'] = $user->getRoleNames()->first() ?? 'user'; // Premier rôle ou 'user' par défaut
+
+        return response()->json(['success' => true, 'data' => $userData]);
+    }
+
+    /**
+     * e. Delete user (id)
+     * Route: DELETE /api/M/users/{id}
+     */
+    public function deleteUser($id)
+    {
+        $user = \App\Models\User::find($id);
+        if (!$user) {
+            return response()->json(['success' => false, 'error' => 'User not found'], 404);
+        }
+
+        // Supprimer l'utilisateur
+        $user->delete();
+
+        return response()->json(['success' => true, 'message' => 'User deleted successfully']);
     }
 
     /**

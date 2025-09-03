@@ -198,10 +198,11 @@ Route::get('Y/search/fandom', [PersonnaliseController::class, 'searchFandomsPagi
 // admin api
 // ====================
 
-Route::get('M/users', [\App\Http\Controllers\Api\M_Controller::class, 'getAllUsers']);
-Route::get('M/user/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'getUser']);
-Route::post('M/users', [\App\Http\Controllers\Api\M_Controller::class, 'addUser']);
-Route::put('M/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateUser']);
+Route::get('admin/users', [\App\Http\Controllers\Api\M_Controller::class, 'getAllUsers']);
+Route::get('admin/user/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'getUser']);
+Route::post('admin/users', [\App\Http\Controllers\Api\M_Controller::class, 'addUser']);
+Route::put('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateUser']);
+Route::delete('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteUser']);
 
 
 // ====================

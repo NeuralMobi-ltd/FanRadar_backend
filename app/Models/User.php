@@ -30,7 +30,6 @@ class User extends Authenticatable
         'bio',
         'gender',
         'password',
-        'role',
     ];
 
     /**
