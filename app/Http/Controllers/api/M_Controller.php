@@ -258,7 +258,7 @@ class M_Controller extends Controller
     // a. Get posts (id, author, fandom, date, likes, category, title, content, media)
     public function getAllPostsSimple()
     {
-        $posts = \App\Models\Post::with(['user:id,first_name', 'category:id,name'])
+        $posts = \App\Models\Post::with(['user:id,first_name', 'category:id,name', 'medias'])
             ->get()
             ->map(function($post) {
                 return [
@@ -270,7 +270,11 @@ class M_Controller extends Controller
                     'category' => $post->category->name ?? null,
                     'title' => $post->title,
                     'content' => $post->content,
-                    'media' => $post->media // Utilise directement le champ media JSON
+                    'media' => $post->medias->filter(function($media) {
+                        return !empty($media->file_path);
+                    })->map(function($media) {
+                        return asset('storage/' . $media->file_path);
+                    })->values()->toArray(),
                 ];
             });
         return response()->json(['success' => true, 'data' => $posts]);
@@ -283,35 +287,49 @@ class M_Controller extends Controller
             'author_id' => 'required|integer|exists:users,id',
             'title' => 'required|string',
             'content' => 'required|string',
-            // Pas besoin de valider 'media' ici
         ]);
 
-        $mediaUrls = [];
-        // Correction : récupérer tous les fichiers envoyés sous "media" ou "media[]"
-        if ($request->hasFile('media')) {
-            $files = $request->file('media');
-            // Si $files n'est pas un tableau, le transformer en tableau
-            if (!is_array($files)) {
-                $files = [$files];
-            }
-            foreach ($files as $file) {
-                if ($file && $file->isValid()) {
-                    $path = $file->store('images', 'public');
-                    $mediaUrls[] = asset('storage/' . $path);
-                }
-            }
-        }
-
+        // 1. Crée le post d'abord
         $post = \App\Models\Post::create([
             'user_id' => $request->author_id,
             'title' => $request->title,
             'content' => $request->content,
             'category_id' => $request->category_id ?? null,
             'subcategory_id' => $request->subcategory_id ?? null,
-            'media' => json_encode($mediaUrls), // Stocke les URLs en JSON
         ]);
 
-        return response()->json(['success' => true, 'data' => $post], 201);
+        // 2. Puis upload les fichiers et lie-les au post
+        if ($request->hasFile('media')) {
+            $files = $request->file('media');
+            if (!is_array($files)) $files = [$files];
+            foreach ($files as $file) {
+                if ($file && $file->isValid()) {
+                    $path = $file->store('images', 'public');
+                    $post->medias()->create([
+                        'file_path' => 'storage/' . $path,
+                        'media_type' => $file->getClientMimeType(),
+                    ]);
+                }
+            }
+        }
+
+        // Recharge le post avec la relation medias
+        $post = \App\Models\Post::with('medias')->find($post->id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $post->id,
+                'user_id' => $post->user_id,
+                'title' => $post->title,
+                'content' => $post->content,
+                'category_id' => $post->category_id,
+                'subcategory_id' => $post->subcategory_id,
+                'created_at' => $post->created_at,
+                'updated_at' => $post->updated_at,
+                'media' => $post->medias->pluck('file_path')->toArray(),
+            ]
+        ], 201);
     }
 
     // c. Delete post
@@ -353,7 +371,8 @@ class M_Controller extends Controller
     {
         $posts = \App\Models\Post::whereHas('tags', function($q) use ($tag) {
             $q->where('tag_name', $tag);
-        })->with(['user:id,first_name', 'category:id,name'])
+        })
+        ->with(['user:id,first_name', 'category:id,name', 'medias'])
         ->get()
         ->map(function($post) {
             return [
@@ -365,7 +384,11 @@ class M_Controller extends Controller
                 'category' => $post->category->name ?? null,
                 'title' => $post->title,
                 'content' => $post->content,
-                'media' => $post->media
+                'media' => $post->medias->filter(function($media) {
+                    return !empty($media->file_path);
+                })->map(function($media) {
+                    return asset('storage/' . $media->file_path);
+                })->values()->toArray(),
             ];
         });
         return response()->json(['success' => true, 'data' => $posts]);
@@ -381,7 +404,7 @@ class M_Controller extends Controller
         if ($request->has('subcategory_id')) {
             $query->where('subcategory_id', $request->subcategory_id);
         }
-        $posts = $query->with(['user:id,first_name', 'category:id,name'])
+        $posts = $query->with(['user:id,first_name', 'category:id,name', 'medias'])
             ->get()
             ->map(function($post) {
                 return [
@@ -393,7 +416,11 @@ class M_Controller extends Controller
                     'category' => $post->category->name ?? null,
                     'title' => $post->title,
                     'content' => $post->content,
-                    'media' => $post->media
+                    'media' => $post->medias->filter(function($media) {
+                        return !empty($media->file_path);
+                    })->map(function($media) {
+                        return asset('storage/' . $media->file_path);
+                    })->values()->toArray(),
                 ];
             });
         return response()->json(['success' => true, 'data' => $posts]);
@@ -403,7 +430,7 @@ class M_Controller extends Controller
     public function getPostsByCategorySimple($category_id)
     {
         $posts = \App\Models\Post::where('category_id', $category_id)
-            ->with(['user:id,first_name', 'category:id,name'])
+            ->with(['user:id,first_name', 'category:id,name', 'medias'])
             ->get()
             ->map(function($post) {
                 return [
@@ -415,7 +442,11 @@ class M_Controller extends Controller
                     'category' => $post->category->name ?? null,
                     'title' => $post->title,
                     'content' => $post->content,
-                    'media' => $post->media
+                    'media' => $post->medias->filter(function($media) {
+                        return !empty($media->file_path);
+                    })->map(function($media) {
+                        return asset('storage/' . $media->file_path);
+                    })->values()->toArray(),
                 ];
             });
         return response()->json(['success' => true, 'data' => $posts]);
@@ -425,7 +456,7 @@ class M_Controller extends Controller
     public function getPostsBySubcategorySimple($subcategory_id)
     {
         $posts = \App\Models\Post::where('subcategory_id', $subcategory_id)
-            ->with(['user:id,first_name', 'category:id,name'])
+            ->with(['user:id,first_name', 'category:id,name', 'medias'])
             ->get()
             ->map(function($post) {
                 return [
@@ -437,7 +468,11 @@ class M_Controller extends Controller
                     'category' => $post->category->name ?? null,
                     'title' => $post->title,
                     'content' => $post->content,
-                    'media' => $post->media
+                    'media' => $post->medias->filter(function($media) {
+                        return !empty($media->file_path);
+                    })->map(function($media) {
+                        return asset('storage/' . $media->file_path);
+                    })->values()->toArray(),
                 ];
             });
         return response()->json(['success' => true, 'data' => $posts]);

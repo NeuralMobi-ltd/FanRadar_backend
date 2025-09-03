@@ -7,12 +7,13 @@ use Illuminate\Database\Eloquent\Model;
 class Media extends Model
 {
     protected $fillable = [
-    'file_path',
-    'media_type',
-];
-public function mediable()
-{
-    return $this->morphTo();
-}
-
+        'url', // pour stocker l'URL du fichier
+        'type', // pour le type MIME
+        'file_path', // si tu utilises ce champ ailleurs
+        'media_type', // si tu utilises ce champ ailleurs
+    ];
+    public function mediable()
+    {
+        return $this->morphTo();
+    }
 }
