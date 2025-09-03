@@ -39,7 +39,7 @@ class M_Controller extends Controller
     }
 
     /**
-     * a. Get all users (id, username, first_name, last_name, email, status, join_date, role, image)
+     * a. Get all users (tous les champs de la table users)
      * Route: GET /api/users
      */
     public function getAllUsers()
@@ -47,29 +47,35 @@ class M_Controller extends Controller
         $users = \App\Models\User::all()->map(function($user) {
             return [
                 'id' => $user->id,
-
-                'username' => $user->username ?? null,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
                 'email' => $user->email,
-                'status' => $user->status ?? 'active',
-                'join_date' => $user->created_at ? $user->created_at->toDateString() : null,
-                'role' => $user->role ?? null,
-                'image' => $user->profile_image,
+                'profile_image' => $user->profile_image,
+                'background_image' => $user->background_image,
+                'date_naissance' => $user->date_naissance,
+                'bio' => $user->bio,
+                'gender' => $user->gender,
+                'role' => $user->role,
+                'email_verified_at' => $user->email_verified_at,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+                // Statistiques supplémentaires
+                'posts_count' => $user->posts()->count(),
+                'followers_count' => $user->followers()->count(),
+                'following_count' => $user->following()->count(),
+                'fandoms_count' => $user->members()->count(),
             ];
         });
         return response()->json(['success' => true, 'data' => $users]);
     }
 
     /**
-     * b. Get user by id, email
+     * b. Get user by id, email (tous les champs de la table users)
      * Route: GET /api/user/{value}
      */
     public function getUser($value)
     {
-        $user = \App\Models\User::where('id', $value)
-            ->orWhere('email', $value)
-            ->first();
+        $user = \App\Models\User::where('id', $value)->orWhere('email', $value)->first();
         if (!$user) {
             return response()->json(['success' => false, 'error' => 'User not found'], 404);
         }
@@ -77,49 +83,69 @@ class M_Controller extends Controller
             'success' => true,
             'data' => [
                 'id' => $user->id,
-
-                'username' => $user->username ?? null,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
                 'email' => $user->email,
-                'status' => $user->status ?? 'active',
-                'join_date' => $user->created_at ? $user->created_at->toDateString() : null,
-                'role' => $user->role ?? null,
-                'image' => $user->profile_image,
+                'profile_image' => $user->profile_image,
+                'background_image' => $user->background_image,
+                'date_naissance' => $user->date_naissance,
+                'bio' => $user->bio,
+                'gender' => $user->gender,
+                'role' => $user->role,
+                'email_verified_at' => $user->email_verified_at,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+                // Statistiques supplémentaires
+                'posts_count' => $user->posts()->count(),
+                'followers_count' => $user->followers()->count(),
+                'following_count' => $user->following()->count(),
+                'fandoms_count' => $user->members()->count(),
             ]
         ]);
     }
 
     /**
-     * c. Add user (first_name, last_name, role, email)
+     * c. Add user (tous les champs disponibles) - Seul admin peut créer des utilisateurs
      * Route: POST /api/users
      */
     public function addUser(Request $request)
     {
         $request->validate([
-            'first_name' => 'required|string',
-            'last_name' => 'required|string',
-
-            'email' => 'required|email|unique:users,email',            'role' => 'in:user,admin',
             'email' => 'required|email|unique:users,email',
-            'role' => 'required|in:user,admin',
             'password' => 'required|string|min:6',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            // Champs optionnels
+            'profile_image' => 'nullable|string|max:500',
+            'background_image' => 'nullable|string|max:500',
+            'date_naissance' => 'nullable|date',
+            'bio' => 'nullable|string|max:1000',
+            'gender' => 'nullable|string|in:male,female,other',
+            'role' => 'nullable|in:user,admin,writer',
         ]);
+
         $user = \App\Models\User::create([
+            'email' => $request->email,
+            'password' => bcrypt($request->password),
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
-            'email' => $request->email,
-            'profile_image' => $request->profile_image ?? null,
-            'password' => bcrypt($request->password),
-            'role' => $request->role ?? 'user', // <-- PREND LA VALEUR ENVOYÉE
-
-
-            'status' => 'active',
-            'profile_image' => $request->profile_image ?? null,
-            'password' => bcrypt($request->password),
-            'role' => $request->role,
-
+            'profile_image' => $request->profile_image,
+            'background_image' => $request->background_image,
+            'date_naissance' => $request->date_naissance,
+            'bio' => $request->bio,
+            'gender' => $request->gender,
+         
         ]);
+
+        // Assigner le rôle avec Spatie Permissions
+        if ($request->role) {
+            $user->assignRole($request->role);
+        } else {
+            $user->assignRole('user'); // Rôle par défaut
+        }
+
+        // Recharger l'utilisateur pour avoir tous les champs
+        $user = $user->fresh();
         return response()->json(['success' => true, 'data' => $user], 201);
     }
 
@@ -156,7 +182,7 @@ class M_Controller extends Controller
     {
         $categories = \App\Models\Category::select('id', 'name')->get();
         return response()->json(['success' => true, 'data' => $categories]);
-    } 
+    }
 
     /**
      * g. Get subcategories (id, cat_id, name)
@@ -328,14 +354,14 @@ class M_Controller extends Controller
     {
         $post = \App\Models\Post::find($id);
         if (!$post) return response()->json(['success' => false, 'error' => 'Post not found'], 404);
-        
+
         $updateData = $request->only(['title', 'content', 'category_id', 'subcategory_id']);
         if ($request->has('media')) {
             $updateData['media'] = $request->media;
         }
-        
+
         $post->update($updateData);
-        
+
         // Mettre à jour les tags si fournis
         if ($request->has('tags') && is_array($request->tags)) {
             $post->tags()->detach(); // Supprimer tous les tags existants
@@ -344,7 +370,7 @@ class M_Controller extends Controller
                 $post->tags()->attach($tag->id);
             }
         }
-        
+
         return response()->json(['success' => true, 'data' => $post]);
     }
 

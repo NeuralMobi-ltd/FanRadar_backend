@@ -195,10 +195,13 @@ Route::get('Y/search/fandom', [PersonnaliseController::class, 'searchFandomsPagi
 
 
 // ====================
-// MAIN CONTENT / FEED
+// admin api
 // ====================
 
-
+Route::get('M/users', [\App\Http\Controllers\Api\M_Controller::class, 'getAllUsers']);
+Route::get('M/user/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'getUser']);
+Route::post('M/users', [\App\Http\Controllers\Api\M_Controller::class, 'addUser']);
+Route::put('M/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateUser']);
 
 
 // ====================

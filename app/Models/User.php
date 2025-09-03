@@ -27,9 +27,10 @@ class User extends Authenticatable
         'profile_image',
         'background_image',
         'date_naissance',
-    'bio',
+        'bio',
         'gender',
         'password',
+        'role',
     ];
 
     /**
