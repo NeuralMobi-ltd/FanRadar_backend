@@ -64,7 +64,7 @@ class AuthentificationController extends Controller
                     'email' => 'required|string|email|unique:users,email',
                     'password' => 'required|string|min:6',
                     'profile_image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-
+                    'bio' => 'nullable|string|max:2000',
                 ]);
 
                 if ($validator->fails()) {
@@ -83,7 +83,8 @@ class AuthentificationController extends Controller
                     'last_name' => $request->last_name,
                     'email' => $request->email,
                     'password' => Hash::make($request->password),
-                    'profile_image' => $profileImagePath ?? 'default.png', // ou null si tu préfères
+                    'profile_image' => $profileImagePath ?? null,
+                    'bio' => $request->bio ?? null,
                 ]);
 
                 $user->assignRole('user');// Assign a default role 'user'

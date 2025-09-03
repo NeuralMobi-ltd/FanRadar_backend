@@ -11,7 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Cette migration ne fait plus rien car la gestion du champ role/rolle est abandonnée
+        Schema::table('fandoms', function (Blueprint $table) {
+            $table->string('logo_image')->nullable()->after('description');
+        });
     }
 
     /**
@@ -19,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Ne rien faire ici non plus
+        Schema::table('fandoms', function (Blueprint $table) {
+            $table->dropColumn('logo_image');
+        });
     }
 };

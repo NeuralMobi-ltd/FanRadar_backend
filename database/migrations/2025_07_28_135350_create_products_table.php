@@ -22,6 +22,11 @@ return new class extends Migration
             $table->date('sale_start_date')->nullable();
             $table->date('sale_end_date')->nullable();
             $table->enum('content_status', ['draft', 'published', 'archived'])->default('draft');
+            $table->string('type')->nullable();
+            $table->decimal('revenue', 15, 2)->nullable();
+
+            $table->unsignedBigInteger('subcategory_id')->nullable();
+            $table->foreign('subcategory_id')->references('id')->on('subcategories')->onDelete('set null');
             $table->timestamps();
         });
     }

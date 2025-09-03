@@ -3,12 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Post extends Model
 {
+    use HasFactory;
     protected $fillable = [
-        'title',
-        'body',
         'content',
         'user_id',
         'feedback',
@@ -17,6 +17,7 @@ class Post extends Model
         'content_status',
         'category_id',
         'subcategory_id',
+        'fandom_id',
         'media',
     ];
 
@@ -24,7 +25,7 @@ class Post extends Model
         'media' => 'array',
     ];
 
-     public function user()
+    public function user()
     {
         return $this->belongsTo(User::class);
     }
@@ -52,6 +53,10 @@ class Post extends Model
     public function favorites()
     {
         return $this->morphMany(Favorite::class, 'favoriteable');
+    }
+    public function comments()
+    {
+        return $this->hasMany(\App\Models\Comment::class);
     }
 
     // Utilisateurs qui ont mis ce post en favori
@@ -87,6 +92,38 @@ class Post extends Model
     public function medias()
     {
         return $this->morphMany(Media::class, 'mediable');
+    }
+
+    /**
+     * Relation vers le fandom (optionnelle)
+     */
+    public function fandom()
+    {
+        return $this->belongsTo(Fandom::class, 'fandom_id');
+    }
+
+    // Relation avec les utilisateurs qui ont sauvegardé ce post
+    public function savedByUsers()
+    {
+        return $this->belongsToMany(User::class, 'saved_posts')->withTimestamps();
+    }
+
+    // Relation directe avec les saved_posts
+    public function savedPosts()
+    {
+        return $this->hasMany(SavedPost::class);
+    }
+
+    // Vérifier si un post est sauvegardé par un utilisateur spécifique
+    public function isSavedBy($userId)
+    {
+        return $this->savedByUsers()->where('user_id', $userId)->exists();
+    }
+
+    // Compter le nombre de fois que ce post a été sauvegardé
+    public function savesCount()
+    {
+        return $this->savedByUsers()->count();
     }
 }
 

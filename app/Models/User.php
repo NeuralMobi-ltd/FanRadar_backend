@@ -11,6 +11,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
+
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, HasApiTokens, HasRoles;
 
@@ -24,6 +25,10 @@ class User extends Authenticatable
         'last_name',
         'email',
         'profile_image',
+        'background_image',
+        'date_naissance',
+    'bio',
+        'gender',
         'password',
     ];
 
@@ -50,18 +55,40 @@ class User extends Authenticatable
         ];
     }
 
+    // Relation avec les posts créés par l'utilisateur
+    public function posts()
+    {
+        return $this->hasMany(\App\Models\Post::class, 'user_id');
+    }
+
+    // Retourne les noms des rôles de l'utilisateur (Spatie)
+    public function getRoleNames()
+    {
+        return $this->roles()->pluck('name');
+    }
+
+    // Retourne les permissions de l'utilisateur (Spatie)
+    public function getPermissionNames()
+    {
+        return $this->getAllPermissions()->pluck('name');
+    }
+
     // Relation avec Orders
     public function orders()
     {
         return $this->hasMany(Order::class);
     }
 
+    public function comments()
+    {
+        return $this->hasMany(\App\Models\Comment::class);
+    }
 
     // Relation avec les posts sauvegardés
     public function savedPosts()
     {
         return $this->belongsToMany(Post::class, 'saved_posts')->withTimestamps();
-    } 
+    }
 
     // Relation avec les favoris
     public function favorites()
@@ -136,5 +163,45 @@ class User extends Authenticatable
     public function followersCount()
     {
         return $this->followers()->count();
+    }
+
+    public function preferredCategories()
+    {
+        return $this->hasMany(UserPreferredCategory::class);
+    }
+
+    public function members()
+    {
+        return $this->hasMany(\App\Models\Member::class);
+    }
+
+    // Relation directe avec les saved_posts
+    public function savedPostsRelation()
+    {
+        return $this->hasMany(SavedPost::class);
+    }
+
+    // Sauvegarder un post
+    public function savePost($postId)
+    {
+        return $this->savedPosts()->attach($postId);
+    }
+
+    // Retirer un post des sauvegardés
+    public function unsavePost($postId)
+    {
+        return $this->savedPosts()->detach($postId);
+    }
+
+    // Vérifier si un post est sauvegardé
+    public function hasSavedPost($postId)
+    {
+        return $this->savedPosts()->where('post_id', $postId)->exists();
+    }
+
+    // Basculer l'état de sauvegarde d'un post
+    public function toggleSavePost($postId)
+    {
+        return $this->savedPosts()->toggle($postId);
     }
 }

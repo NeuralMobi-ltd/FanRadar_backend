@@ -109,13 +109,13 @@ class M_Controller extends Controller
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
             'email' => $request->email,
-            'profile_image' => $request->profile_image ?? 'default.png',
+            'profile_image' => $request->profile_image ?? null,
             'password' => bcrypt($request->password),
             'role' => $request->role ?? 'user', // <-- PREND LA VALEUR ENVOYÉE
 
 
             'status' => 'active',
-            'profile_image' => $request->profile_image ?? 'default.png',
+            'profile_image' => $request->profile_image ?? null,
             'password' => bcrypt($request->password),
             'role' => $request->role,
 

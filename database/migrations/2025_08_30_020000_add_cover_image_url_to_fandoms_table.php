@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->enum('role', ['user', 'admin'])->default('user')->change();
+        Schema::table('fandoms', function (Blueprint $table) {
+            $table->string('cover_image')->nullable()->after('description');
         });
     }
 
@@ -21,8 +21,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('role')->default('user')->change();
+        Schema::table('fandoms', function (Blueprint $table) {
+            if (Schema::hasColumn('fandoms', 'cover_image')) {
+                $table->dropColumn('cover_image');
+            }
         });
     }
 };
