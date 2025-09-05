@@ -28,13 +28,25 @@ class UserFactory extends Factory
             'last_name' => fake()->lastName(),
             'email' => fake()->unique()->safeEmail(),
             'profile_image' => fake()->imageUrl(200, 200, 'people'),
-            'role' => fake()->randomElement(['user', 'admin']),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'date_naissance' => fake()->optional()->date('Y-m-d'),
             'gender' => fake()->randomElement(['male', 'female', 'other']),
             'remember_token' => Str::random(10),
         ];
+    }
+
+    /**
+     * Configure the model factory to assign a role after creation.
+     */
+    public function configure()
+    {
+        return $this->afterCreating(function (\App\Models\User $user) {
+            // Assigner un rôle aléatoire après la création de l'utilisateur
+            $roles = ['admin', 'user', 'writer']; // Utiliser les rôles qui existent dans RolesTableSeeder
+            $randomRole = fake()->randomElement($roles);
+            $user->assignRole($randomRole);
+        });
     }
 
     /**

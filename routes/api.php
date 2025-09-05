@@ -202,11 +202,11 @@ Route::get('Y/hashtags/trending', [PersonnaliseController::class, 'getTrendingHa
 Route::get('Y/hashtags/{hashtag_id}/posts', [PersonnaliseController::class, 'getHashtagPosts']);
 Route::get('Y/fandoms/trending/top', [PersonnaliseController::class, 'getTrendingFandoms']);
 
-Route::get('Y/products', [PersonnaliseController::class, 'index']);
-Route::get('Y/products/{product}', [PersonnaliseController::class, 'show']);
-Route::post('Y/products', [PersonnaliseController::class, 'store']);
-Route::put('Y/products/{product}', [PersonnaliseController::class, 'update']);
-Route::delete('Y/products/{product}', [PersonnaliseController::class, 'destroy']);
+Route::get('Y/products', [ProductController::class, 'index']);
+Route::get('Y/products/{product}', [ProductController::class, 'show']);
+Route::post('Y/products', [ProductController::class, 'store']);
+Route::put('Y/products/{product}', [ProductController::class, 'update']);
+Route::delete('Y/products/{product}', [ProductController::class, 'destroy']);
 
 // ====================
 // admin api

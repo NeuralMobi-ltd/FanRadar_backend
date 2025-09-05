@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -20,6 +21,29 @@ class DatabaseSeeder extends Seeder
             AssignPermissionsToRolesSeeder::class,
             // ajoute ici tous tes seeders
         ]);
+
+        // Désactiver les contraintes de clés étrangères temporairement
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+
+        // Vider les tables avant de créer de nouvelles données (dans l'ordre inverse des dépendances)
+        \App\Models\Member::truncate();
+        \App\Models\Favorite::truncate();
+        \App\Models\Rating::truncate();
+        DB::table('comments')->truncate(); // Vider la table comments en premier
+        DB::table('taggables')->truncate(); // Vider la table pivot taggables
+        \App\Models\Post::truncate();
+        \App\Models\Product::truncate();
+        \App\Models\Tag::truncate();
+        \App\Models\Fandom::truncate();
+        \App\Models\Subcategory::truncate();
+        \App\Models\Category::truncate();
+        \App\Models\User::truncate(); // Vider la table users
+
+        // Réactiver les contraintes de clés étrangères
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+
+        // Créer quelques utilisateurs avec des rôles assignés
+        \App\Models\User::factory(10)->create();
 
         \App\Models\Category::factory(5)->create();
         \App\Models\Subcategory::factory(10)->create();
