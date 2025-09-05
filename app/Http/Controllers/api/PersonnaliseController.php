@@ -1115,49 +1115,49 @@ class PersonnaliseController extends Controller
 
     public function getTrendingFandoms()
     {
-        $user = Auth::user();
+        try {
+            // Récupérer tous les fandoms avec le nombre de membres et de posts, triés par nombre de membres décroissant
+            $fandoms = \App\Models\Fandom::withCount(['members', 'posts'])
+                ->orderByDesc('members_count')
+                ->get();
 
-        // Charger la relation subcategory et le nombre de posts/members pour éviter les N+1
-        $fandoms = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->get();
-
-        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
-        $userMemberships = [];
-        if ($user) {
-            $memberships = \App\Models\Member::where('user_id', $user->id)->get();
-            foreach ($memberships as $membership) {
-                $userMemberships[$membership->fandom_id] = $membership->role;
+            // Vérifier s'il y a des fandoms
+            if ($fandoms->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No fandoms found',
+                    'data' => [
+                        'fandoms' => [],
+                        'total' => 0
+                    ]
+                ]);
             }
+
+            // Formater les fandoms pour inclure toutes les informations de la table + compteurs
+            $formattedFandoms = $fandoms->map(function ($fandom) {
+                // Récupérer toutes les données de la table fandom
+                $fandomData = $fandom->toArray();
+
+                // Ajouter les compteurs
+                $fandomData['members_count'] = $fandom->members_count ?? 0;
+                $fandomData['posts_count'] = $fandom->posts_count ?? 0;
+
+                return $fandomData;
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'fandoms' => $formattedFandoms,
+                    'total' => $fandoms->count()
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error retrieving trending fandoms: ' . $e->getMessage()
+            ], 500);
         }
-
-        // Retourner tous les champs du modèle Fandom (sans les lister manuellement)
-        // on convertit chaque modèle en tableau puis on ajoute les compteurs et une sous-catégorie minimale
-        $formatted = $fandoms->map(function ($f) use ($userMemberships) {
-            $attrs = $f->toArray();
-            // s'assurer que les compteurs sont présents
-            $attrs['posts_count'] = $f->posts_count ?? 0;
-            $attrs['members_count'] = $f->members_count ?? 0;
-
-            // Ajouter les informations de membership
-            $attrs['is_member'] = isset($userMemberships[$f->id]);
-            $attrs['member_role'] = $userMemberships[$f->id] ?? null;
-
-            // réduire la sous-catégorie à id/name pour éviter de renvoyer trop de données
-            if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
-                $attrs['subcategory'] = [
-                    'id' => $attrs['subcategory']['id'] ?? null,
-                    'name' => $attrs['subcategory']['name'] ?? null,
-                ];
-            }
-
-            return $attrs;
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'fandoms' => $formatted
-            ]
-        ]);
     }
 
     /**
@@ -2189,15 +2189,174 @@ class PersonnaliseController extends Controller
     // ====================
     // HASHTAGS
     // ====================
-    public function getHashtagPosts($hashtag) {
+
+    public function getTrendingHashtags(Request $request) {
+        $limit = min(50, max(1, (int) $request->get('limit', 10)));
+        $days = max(1, (int) $request->get('days', 7)); // Trending sur les X derniers jours
+
+        // Calculer la date de début
+        $startDate = now()->subDays($days);
+
+        // Récupérer les hashtags les plus utilisés dans les posts récents
+        $trendingTags = \App\Models\Tag::withCount(['posts' => function($query) use ($startDate) {
+                $query->where('posts.content_status', 'published')
+                      ->where('posts.created_at', '>=', $startDate);
+            }])
+            ->having('posts_count', '>', 0)
+            ->orderByDesc('posts_count')
+            ->limit($limit)
+            ->get();
+
+        // Formater les hashtags simplement
+        $formattedTags = $trendingTags->map(function($tag) {
+            return [
+                'id' => $tag->id,
+                'tag_name' => $tag->tag_name,
+                'posts_count' => $tag->posts_count,
+            ];
+        });
+
         return response()->json([
             'success' => true,
             'data' => [
-                'posts' => [],
+                'hashtags' => $formattedTags,
+            ]
+        ]);
+    }
+
+    public function getHashtagPosts($hashtagId, Request $request) {
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(100, max(1, (int) $request->get('limit', 10)));
+
+        // Rechercher le tag par ID
+        $tag = \App\Models\Tag::find($hashtagId);
+
+        if (!$tag) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hashtag not found',
+                'data' => [
+                    'posts' => [],
+                    'stats' => [
+                        'totalPosts' => 0,
+                        'growth' => '+0%',
+                        'category' => 'General'
+                    ]
+                ]
+            ], 404);
+        }
+
+        return $this->getPostsByTag($tag, $page, $limit);
+    }
+
+
+
+    private function getPostsByTag($tag, $page, $limit) {
+        // Récupérer les posts associés à ce tag avec pagination
+        $postsQuery = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+                $query->where('tag_id', $tag->id);
+            })
+            ->where('content_status', 'published') // Seulement les posts publiés
+            ->with(['user:id,first_name,last_name,email,profile_image,bio', 'medias', 'tags', 'fandom:id,name'])
+            ->withCount(['favorites', 'comments']) // Compter les likes et commentaires
+            ->orderBy('created_at', 'desc');
+
+        $posts = $postsQuery->paginate($limit, ['*'], 'page', $page);
+
+        // Compter le total de posts pour ce hashtag
+        $totalPosts = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+            $query->where('tag_id', $tag->id);
+        })->where('content_status', 'published')->count();
+
+        // Calculer la croissance (posts du mois dernier vs ce mois)
+        $currentMonth = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+            $query->where('tag_id', $tag->id);
+        })
+        ->where('content_status', 'published')
+        ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
+        ->count();
+
+        $lastMonth = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+            $query->where('tag_id', $tag->id);
+        })
+        ->where('content_status', 'published')
+        ->whereBetween('created_at', [now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth()])
+        ->count();
+
+        $growth = $lastMonth > 0 ? round((($currentMonth - $lastMonth) / $lastMonth) * 100, 1) : 0;
+        $growthText = $growth > 0 ? "+{$growth}%" : "{$growth}%";
+
+        // Déterminer la catégorie la plus fréquente pour ce hashtag
+        $topCategory = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+            $query->where('tag_id', $tag->id);
+        })
+        ->whereNotNull('subcategory_id')
+        ->with('subcategory.category')
+        ->get()
+        ->groupBy('subcategory.category.name')
+        ->sortByDesc(function($posts) {
+            return $posts->count();
+        })
+        ->keys()
+        ->first() ?? 'General';
+
+        // Formater les posts
+        $formattedPosts = collect($posts->items())->map(function ($post) {
+            $user = $post->user;
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+                'fandom' => $post->fandom ? [
+                    'id' => $post->fandom->id,
+                    'name' => $post->fandom->name,
+                ] : null,
+                'media' => $post->medias ? $post->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'file_type' => $media->file_type,
+                        'file_size' => $media->file_size,
+                    ];
+                })->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'feedback' => $post->feedback ?? 0,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'hashtag' => $tag->tag_name,
+                'tag_id' => $tag->id,
+                'posts' => $formattedPosts,
                 'stats' => [
-                    'totalPosts' => 0,
-                    'growth' => '+0%',
-                    'category' => 'General'
+                    'totalPosts' => $totalPosts,
+                    'growth' => $growthText,
+                    'category' => $topCategory,
+                    'currentMonth' => $currentMonth,
+                    'lastMonth' => $lastMonth
+                ],
+                'pagination' => [
+                    'page' => $posts->currentPage(),
+                    'per_page' => $posts->perPage(),
+                    'total' => $posts->total(),
+                    'last_page' => $posts->lastPage(),
+                    'has_more' => $posts->hasMorePages(),
                 ]
             ]
         ]);
@@ -2746,6 +2905,132 @@ class PersonnaliseController extends Controller
                 ]
             ]
         ], 200);
+    }
+
+    /**
+     * Récupérer les posts d'une sous-catégorie avec leurs médias
+     * Route: GET /api/Y/subcategories/{subcategory}/content
+     */
+    public function getSubcategoryContent($subcategoryId)
+    {
+        // Récupérer la sous-catégorie avec sa catégorie parent
+        $subcategory = \App\Models\Subcategory::with(['category'])->find($subcategoryId);
+
+        if (!$subcategory) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sous-catégorie introuvable'
+            ], 404);
+        }
+
+        // Récupérer tous les posts associés à cette sous-catégorie avec leurs relations
+        $posts = $subcategory->posts()->with([
+            'user:id,first_name,last_name,profile_image',
+            'tags:id,tag_name',
+            'medias:id,file_path,media_type,mediable_id,mediable_type' // Inclure les médias
+        ])->get();
+
+        // Formatter la réponse
+        $response = [
+            'success' => true,
+            'data' => [
+                'subcategory' => [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'category' => $subcategory->category ? [
+                        'id' => $subcategory->category->id,
+                        'name' => $subcategory->category->name
+                    ] : null,
+                    'created_at' => $subcategory->created_at,
+                    'updated_at' => $subcategory->updated_at
+                ],
+                'posts' => $posts->map(function ($post) {
+                    return [
+                        'id' => $post->id,
+                        'description' => $post->description,
+                        'feedback' => $post->feedback,
+                        'schedule_at' => $post->schedule_at,
+                        'content_status' => $post->content_status,
+                        'media' => $post->media, // Champ media (array)
+                        'user' => $post->user ? [
+                            'id' => $post->user->id,
+                            'first_name' => $post->user->first_name,
+                            'last_name' => $post->user->last_name,
+                            'profile_image' => $post->user->profile_image
+                        ] : null,
+                        'tags' => $post->tags->pluck('tag_name')->toArray(), // Tableau simple des noms
+                        'medias' => $post->medias->map(function ($media) {
+                            return [
+                                'id' => $media->id,
+                                'file_path' => $media->file_path,
+                                'media_type' => $media->media_type
+                            ];
+                        }), // Médias polymorphes
+                         'likes_count' => method_exists($post, 'favorites') ? $post->favorites()->count() : 0,
+                         'comments_count' => method_exists($post, 'comments') ? $post->comments()->count() : 0,
+                        'created_at' => $post->created_at,
+                        'updated_at' => $post->updated_at
+                    ];
+                }),
+                'posts_count' => $posts->count()
+            ]
+        ];
+
+        return response()->json($response, 200);
+    }
+
+    /**
+     * Récupérer les fandoms d'une sous-catégorie
+     * Route: GET /api/Y/subcategories/{subcategory_id}/fandoms
+     */
+    public function getSubcategoryFandoms($subcategoryId)
+    {
+        // Récupérer la sous-catégorie avec sa catégorie parent
+        $subcategory = \App\Models\SubCategory::with(['category'])->find($subcategoryId);
+
+        if (!$subcategory) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sous-catégorie introuvable'
+            ], 404);
+        }
+
+        // Récupérer tous les fandoms associés à cette sous-catégorie avec le nombre de membres et de posts
+        $fandoms = \App\Models\Fandom::where('subcategory_id', $subcategoryId)
+            ->withCount(['members', 'posts'])
+            ->get();
+
+        // Formater les fandoms
+        $formattedFandoms = $fandoms->map(function ($fandom) {
+            // Récupérer toutes les données de la table fandom
+            $fandomData = $fandom->toArray();
+
+            // Ajouter les compteurs
+            $fandomData['members_count'] = $fandom->members_count ?? 0;
+            $fandomData['posts_count'] = $fandom->posts_count ?? 0;
+
+            return $fandomData;
+        });
+
+        // Formatter la réponse
+        $response = [
+            'success' => true,
+            'data' => [
+                'subcategory' => [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'description' => $subcategory->description,
+                    'category' => $subcategory->category ? [
+                        'id' => $subcategory->category->id,
+                        'name' => $subcategory->category->name
+                    ] : null
+                ],
+                'fandoms' => $formattedFandoms,
+                'fandoms_count' => $fandoms->count()
+            ]
+        ];
+
+        return response()->json($response, 200);
     }
 
 }

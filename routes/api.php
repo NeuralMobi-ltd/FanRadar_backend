@@ -173,7 +173,7 @@ Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']
 
 //Route::get('/store/products', [PersonnaliseController::class, 'getStoreProducts']);
 Route::get('Y/fandoms', [PersonnaliseController::class, 'getFandoms']);
-Route::get('Y/fandoms/trending', [PersonnaliseController::class, 'getTrendingFandoms']);
+
 // Search fandoms by query: /api/fandoms/search?q=QUERY
 Route::get('Y/fandoms/search', [PersonnaliseController::class, 'searchFandoms']);
 
@@ -186,6 +186,7 @@ Route::get('Y/fandoms/{fandom_id}/members', [PersonnaliseController::class, 'get
 Route::get('Y/categories', [PersonnaliseController::class, 'getAllCategories']);
 Route::get('Y/categories/{category_id}/subcategories', [PersonnaliseController::class, 'getCategorySubcategories']);
 
+
 // Search users by name with pagination
 Route::get('Y/search/users', [PersonnaliseController::class, 'searchUsers']);
 // Search posts by tags, description or subcategory with pagination
@@ -193,6 +194,19 @@ Route::get('Y/search/posts', [PersonnaliseController::class, 'searchPosts']);
 // Search fandoms by name and description with pagination
 Route::get('Y/search/fandom', [PersonnaliseController::class, 'searchFandomsPaginated']);
 
+
+Route::get('Y/subcategories/{subcategory}/content', [PersonnaliseController::class, 'getSubcategoryContent']);
+Route::get('Y/subcategories/{subcategory_id}/fandoms', [PersonnaliseController::class, 'getSubcategoryFandoms']);
+
+Route::get('Y/hashtags/trending', [PersonnaliseController::class, 'getTrendingHashtags']);
+Route::get('Y/hashtags/{hashtag_id}/posts', [PersonnaliseController::class, 'getHashtagPosts']);
+Route::get('Y/fandoms/trending/top', [PersonnaliseController::class, 'getTrendingFandoms']);
+
+Route::get('Y/products', [PersonnaliseController::class, 'index']);
+Route::get('Y/products/{product}', [PersonnaliseController::class, 'show']);
+Route::post('Y/products', [PersonnaliseController::class, 'store']);
+Route::put('Y/products/{product}', [PersonnaliseController::class, 'update']);
+Route::delete('Y/products/{product}', [PersonnaliseController::class, 'destroy']);
 
 // ====================
 // admin api
@@ -231,7 +245,6 @@ Route::middleware('auth:sanctum')->group(function () {
 // ====================
 // HASHTAGS
 // ====================
-Route::get('/hashtags/{hashtag}/posts', [PersonnaliseController::class, 'getHashtagPosts']);
 
 // ====================
 // STORE / E-COMMERCE
