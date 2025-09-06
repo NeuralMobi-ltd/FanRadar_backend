@@ -159,6 +159,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Allow members to delete their post in a fandom
     Route::delete('Y/fandoms/{fandom_id}/posts/{post_id}', [PersonnaliseController::class, 'deletePostInFandom']);
 
+    Route::get('Y/feed/following', [PersonnaliseController::class, 'getFollowingFeed']);
+
+
 });
 
 
@@ -167,6 +170,7 @@ Route::get('Y/users/{userId}/following', [PersonnaliseController::class, 'getUse
 
 Route::get('Y/feed/home', [PersonnaliseController::class, 'getHomeFeed']);
 Route::get('Y/feed/explore', [PersonnaliseController::class, 'getExploreFeed']);
+
 
 Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']);
 //Route::get('/categories/{category}/content', [PersonnaliseController::class, 'getCategoryContent']);
@@ -201,6 +205,12 @@ Route::get('Y/subcategories/{subcategory_id}/fandoms', [PersonnaliseController::
 Route::get('Y/hashtags/trending', [PersonnaliseController::class, 'getTrendingHashtags']);
 Route::get('Y/hashtags/{hashtag_id}/posts', [PersonnaliseController::class, 'getHashtagPosts']);
 Route::get('Y/fandoms/trending/top', [PersonnaliseController::class, 'getTrendingFandoms']);
+
+Route::get('Y/posts/trending/top', [PersonnaliseController::class, 'getTrendingPosts']);
+Route::get('Y/posts/{postId}/comments', [PersonnaliseController::class, 'getPostComments']);
+Route::get('Y/categories/{category_id}/posts', [PersonnaliseController::class, 'getCategoryPosts']);
+Route::get('Y/categories/{category_id}/fandoms', [PersonnaliseController::class, 'getCategoryFandoms']);
+
 
 Route::get('Y/products', [ProductController::class, 'index']);
 Route::get('Y/products/{product}', [ProductController::class, 'show']);

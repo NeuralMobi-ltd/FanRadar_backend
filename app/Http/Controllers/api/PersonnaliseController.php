@@ -3042,4 +3042,503 @@ class PersonnaliseController extends Controller
         return response()->json($response, 200);
     }
 
+    /**
+     * Récupérer les posts trending basés sur le nombre de likes et commentaires
+     * Route: GET /api/Y/posts/trending/top
+     */
+    public function getTrendingPosts(Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = $request->get('limit', 20);
+        $days = max(1, (int) $request->get('days', 7)); // Trending sur les X derniers jours
+
+        // Calculer la date de début
+        $startDate = now()->subDays($days);
+
+        // Récupérer les posts avec le count des favorites et commentaires
+        $trendingPosts = \App\Models\Post::with(['user', 'medias', 'tags'])
+            ->where('content_status', 'published')
+            ->where('created_at', '>=', $startDate)
+            ->withCount(['favorites', 'comments'])
+            ->orderBy('favorites_count', 'desc')
+            ->orderBy('comments_count', 'desc')
+            ->take($limit)
+            ->get();
+
+        // Formater les posts EXACTEMENT comme getHomeFeed
+        $formattedPosts = $trendingPosts->map(function ($post) {
+            // Récupérer toutes les données du post
+            $postData = $post->toArray();
+
+            // Ajouter les compteurs
+            $postData['comments_count'] = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+
+            // Ajouter les médias
+            $postData['media'] = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
+
+            // Ajouter les tags
+            $postData['tags'] = method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [];
+
+            // Supprimer le champ medias (garder seulement media)
+            unset($postData['medias']);
+
+            // Formater l'utilisateur
+            if (isset($postData['user']) && is_array($postData['user'])) {
+                // Supprimer les champs sensibles de l'utilisateur
+                unset($postData['user']['password']);
+                unset($postData['user']['email_verified_at']);
+                unset($postData['user']['remember_token']);
+            }
+
+            return $postData;
+        });
+
+        // Même structure de réponse que getHomeFeed
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts->values(),
+                'pagination' => [
+                    'page' => 1,
+                    'limit' => $limit,
+                    'hasNext' => false
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer les commentaires d'un post avec les informations des utilisateurs
+     * Route: GET /api/Y/posts/{postId}/comments
+     */
+    public function getPostComments($postId, Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Vérifier que le post existe
+        $post = \App\Models\Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found'
+            ], 404);
+        }
+
+        // Récupérer les commentaires avec pagination
+        $comments = \App\Models\Comment::where('post_id', $postId)
+            ->with(['user:id,first_name,last_name,email,profile_image,bio'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les commentaires
+        $formattedComments = collect($comments->items())->map(function ($comment) {
+            $user = $comment->user;
+            return [
+                'id' => $comment->id,
+                'content' => $comment->content,
+                'created_at' => $comment->created_at ? $comment->created_at->toISOString() : null,
+                'updated_at' => $comment->updated_at ? $comment->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'post_id' => $postId,
+                'comments' => $formattedComments,
+                'comments_count' => $comments->total(),
+                'pagination' => [
+                    'current_page' => $comments->currentPage(),
+                    'total_pages' => $comments->lastPage(),
+                    'total_items' => $comments->total(),
+                    'per_page' => $comments->perPage(),
+                    'has_more' => $comments->hasMorePages(),
+                    'from' => $comments->firstItem(),
+                    'to' => $comments->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer le feed des posts des utilisateurs suivis (following)
+     * Route: GET /api/Y/feed/following
+     */
+    public function getFollowingFeed(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized - User must be logged in'
+            ], 401);
+        }
+
+        $page = $request->get('page', 1);
+        $limit = min(50, max(1, (int) $request->get('limit', 20)));
+
+        // Récupérer les IDs des utilisateurs que l'utilisateur actuel suit
+        $followingUserIds = \App\Models\Follow::where('follower_id', $user->id)
+            ->pluck('following_id')
+            ->toArray();
+
+        if (empty($followingUserIds)) {
+            // Si l'utilisateur ne suit personne, retourner un feed vide
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'posts' => [],
+                    'following_count' => 0,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'total_pages' => 0,
+                        'total_items' => 0,
+                        'per_page' => $limit,
+                        'has_more' => false,
+                        'from' => null,
+                        'to' => null
+                    ]
+                ]
+            ]);
+        }
+
+        // Récupérer les posts des utilisateurs suivis avec pagination
+        $posts = \App\Models\Post::whereIn('user_id', $followingUserIds)
+            ->where('content_status', 'published')
+            ->with(['user:id,first_name,last_name,email,profile_image,bio', 'medias', 'tags', 'fandom:id,name'])
+            ->withCount(['favorites', 'comments'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts
+        $formattedPosts = collect($posts->items())->map(function ($post) {
+            $user = $post->user;
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+                'fandom' => $post->fandom ? [
+                    'id' => $post->fandom->id,
+                    'name' => $post->fandom->name,
+                ] : null,
+                'media' => $post->medias ? $post->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'media_type' => $media->media_type,
+                    ];
+                })->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'feedback' => $post->feedback ?? 0,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts,
+                'following_count' => count($followingUserIds),
+                'pagination' => [
+                    'current_page' => $posts->currentPage(),
+                    'total_pages' => $posts->lastPage(),
+                    'total_items' => $posts->total(),
+                    'per_page' => $posts->perPage(),
+                    'has_more' => $posts->hasMorePages(),
+                    'from' => $posts->firstItem(),
+                    'to' => $posts->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer tous les posts d'une catégorie (via toutes ses sous-catégories)
+     * Route: GET /api/Y/categories/{category_id}/posts
+     */
+    public function getCategoryPosts($categoryId, Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Vérifier que la catégorie existe
+        $category = \App\Models\Category::find($categoryId);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        // Récupérer toutes les sous-catégories de cette catégorie
+        $subcategories = \App\Models\SubCategory::where('category_id', $categoryId)->get();
+        $subcategoryIds = $subcategories->pluck('id')->toArray();
+
+        if (empty($subcategoryIds)) {
+            // Si la catégorie n'a pas de sous-catégories, retourner un résultat vide
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'category' => [
+                        'id' => $category->id,
+                        'name' => $category->name,
+                        'description' => $category->description,
+                    ],
+                    'subcategories' => [],
+                    'posts' => [],
+                    'posts_count' => 0,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'total_pages' => 0,
+                        'total_items' => 0,
+                        'per_page' => $limit,
+                        'has_more' => false,
+                        'from' => null,
+                        'to' => null
+                    ]
+                ]
+            ]);
+        }
+
+        // Récupérer les posts de toutes les sous-catégories avec pagination
+        $posts = \App\Models\Post::whereIn('subcategory_id', $subcategoryIds)
+            ->where('content_status', 'published')
+            ->with([
+                'user:id,first_name,last_name,email,profile_image,bio',
+                'medias',
+                'tags',
+                'subcategory:id,name,category_id',
+                'fandom:id,name'
+            ])
+            ->withCount(['favorites', 'comments'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts
+        $formattedPosts = collect($posts->items())->map(function ($post) {
+            $user = $post->user;
+            $subcategory = $post->subcategory;
+
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+                'subcategory' => $subcategory ? [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'category_id' => $subcategory->category_id,
+                ] : null,
+                'fandom' => $post->fandom ? [
+                    'id' => $post->fandom->id,
+                    'name' => $post->fandom->name,
+                ] : null,
+                'media' => $post->medias ? $post->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'media_type' => $media->media_type,
+                    ];
+                })->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'feedback' => $post->feedback ?? 0,
+            ];
+        });
+
+        // Formater les sous-catégories pour la réponse
+        $formattedSubcategories = $subcategories->map(function ($subcategory) {
+            return [
+                'id' => $subcategory->id,
+                'name' => $subcategory->name,
+                'description' => $subcategory->description,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'category' => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'description' => $category->description,
+                ],
+                'subcategories' => $formattedSubcategories,
+                'posts' => $formattedPosts,
+                'posts_count' => $posts->total(),
+                'pagination' => [
+                    'current_page' => $posts->currentPage(),
+                    'total_pages' => $posts->lastPage(),
+                    'total_items' => $posts->total(),
+                    'per_page' => $posts->perPage(),
+                    'has_more' => $posts->hasMorePages(),
+                    'from' => $posts->firstItem(),
+                    'to' => $posts->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer tous les fandoms d'une catégorie (via toutes ses sous-catégories)
+     * Route: GET /api/Y/categories/{category_id}/fandoms
+     */
+    public function getCategoryFandoms($categoryId, Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Vérifier que la catégorie existe
+        $category = \App\Models\Category::find($categoryId);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        // Récupérer toutes les sous-catégories de cette catégorie
+        $subcategories = \App\Models\SubCategory::where('category_id', $categoryId)->get();
+        $subcategoryIds = $subcategories->pluck('id')->toArray();
+
+        if (empty($subcategoryIds)) {
+            // Si la catégorie n'a pas de sous-catégories, retourner un résultat vide
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'category' => [
+                        'id' => $category->id,
+                        'name' => $category->name,
+                        'description' => $category->description,
+                    ],
+                    'subcategories' => [],
+                    'fandoms' => [],
+                    'fandoms_count' => 0,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'total_pages' => 0,
+                        'total_items' => 0,
+                        'per_page' => $limit,
+                        'has_more' => false,
+                        'from' => null,
+                        'to' => null
+                    ]
+                ]
+            ]);
+        }
+
+        // Récupérer les fandoms de toutes les sous-catégories avec pagination
+        $fandoms = \App\Models\Fandom::whereIn('subcategory_id', $subcategoryIds)
+            ->with([
+                'subcategory:id,name,category_id'
+            ])
+            ->withCount(['members', 'posts'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Obtenir les rôles de l'utilisateur authentifié pour tous les fandoms s'il est connecté
+        $user = Auth::user();
+        $userMemberships = [];
+        if ($user) {
+            $fandomIds = collect($fandoms->items())->pluck('id')->toArray();
+            $memberships = \App\Models\Member::where('user_id', $user->id)
+                ->whereIn('fandom_id', $fandomIds)
+                ->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
+
+        // Formater les fandoms
+        $formattedFandoms = collect($fandoms->items())->map(function ($fandom) use ($userMemberships) {
+            $subcategory = $fandom->subcategory;
+
+            return [
+                'id' => $fandom->id,
+                'name' => $fandom->name,
+                'description' => $fandom->description,
+                'cover_image' => $fandom->cover_image,
+                'logo_image' => $fandom->logo_image,
+                'created_at' => $fandom->created_at ? $fandom->created_at->toISOString() : null,
+                'updated_at' => $fandom->updated_at ? $fandom->updated_at->toISOString() : null,
+                'subcategory' => $subcategory ? [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'category_id' => $subcategory->category_id,
+                ] : null,
+                'members_count' => $fandom->members_count ?? 0,
+                'posts_count' => $fandom->posts_count ?? 0,
+                'is_member' => isset($userMemberships[$fandom->id]),
+                'member_role' => $userMemberships[$fandom->id] ?? null,
+            ];
+        });
+
+        // Formater les sous-catégories pour la réponse
+        $formattedSubcategories = $subcategories->map(function ($subcategory) {
+            return [
+                'id' => $subcategory->id,
+                'name' => $subcategory->name,
+                'description' => $subcategory->description,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'category' => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'description' => $category->description,
+                ],
+                'subcategories' => $formattedSubcategories,
+                'fandoms' => $formattedFandoms,
+                'fandoms_count' => $fandoms->total(),
+                'pagination' => [
+                    'current_page' => $fandoms->currentPage(),
+                    'total_pages' => $fandoms->lastPage(),
+                    'total_items' => $fandoms->total(),
+                    'per_page' => $fandoms->perPage(),
+                    'has_more' => $fandoms->hasMorePages(),
+                    'from' => $fandoms->firstItem(),
+                    'to' => $fandoms->lastItem()
+                ]
+            ]
+        ]);
+    }
+
 }
