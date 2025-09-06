@@ -709,27 +709,36 @@ class PersonnaliseController extends Controller
         $page = $request->get('page', 1);
         $limit = $request->get('limit', 20);
 
-        $posts = Post::with(['user', 'medias'])
+        $posts = Post::with(['user', 'medias', 'tags'])
             ->orderBy('created_at', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
 
         $formattedPosts = $posts->map(function ($post) {
-            $user = $post->user;
-            // La relation favorites() sur le post ne contient que les favoris de ce post
-            $likeCount = method_exists($post, 'favorites')
-                ? $post->favorites()->count()
-                : 0;
-            $commentCount = method_exists($post, 'comments') ? $post->comments()->count() : 0;
-            $media = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
-            return [
-                'id' => $post->id,
-                'content' => $post->content ?? $post->body ?? '',
-                'media' => $media,
-                'user' => $user ? $user->toArray() : null,
-                'likes_count' => $likeCount,
-                'comments_count' => $commentCount,
-                'created_at' => $post->created_at ? $post->created_at->toISOString() : null
-            ];
+            // Récupérer toutes les données du post
+            $postData = $post->toArray();
+
+            // Ajouter les compteurs
+            $postData['likes_count'] = method_exists($post, 'favorites') ? $post->favorites()->count() : 0;
+            $postData['comments_count'] = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+
+            // Ajouter les médias
+            $postData['media'] = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
+
+            // Ajouter les tags
+            $postData['tags'] = method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [];
+
+            // Supprimer le champ medias (garder seulement media)
+            unset($postData['medias']);
+
+            // Formater l'utilisateur
+            if (isset($postData['user']) && is_array($postData['user'])) {
+                // Supprimer les champs sensibles de l'utilisateur
+                unset($postData['user']['password']);
+                unset($postData['user']['email_verified_at']);
+                unset($postData['user']['remember_token']);
+            }
+
+            return $postData;
         });
 
         return response()->json([
