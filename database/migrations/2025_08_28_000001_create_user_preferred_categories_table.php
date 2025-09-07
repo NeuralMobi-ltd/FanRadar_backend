@@ -12,16 +12,26 @@ return new class extends Migration {
      */
     public function up()
     {
-        Schema::create('user_preferred_categories', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('category_id');
-            $table->timestamps();
+        // Ne pas recréer la table si elle existe déjà
+        if (!Schema::hasTable('user_preferred_categories')) {
+            Schema::create('user_preferred_categories', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('user_id');
+                $table->unsignedBigInteger('category_id');
+                $table->timestamps();
 
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('category_id')->references('id')->on('categories')->onDelete('cascade');
-            $table->unique(['user_id', 'category_id']);
-        });
+                // Ajouter les clés étrangères uniquement si les tables référencées existent
+                if (Schema::hasTable('users')) {
+                    $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+                }
+
+                if (Schema::hasTable('categories')) {
+                    $table->foreign('category_id')->references('id')->on('categories')->onDelete('cascade');
+                }
+
+                $table->unique(['user_id', 'category_id']);
+            });
+        }
     }
 
     /**

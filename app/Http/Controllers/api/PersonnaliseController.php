@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
+use App\Models\Fandom;
+use App\Models\Member;
 
 class PersonnaliseController extends Controller
 {
@@ -487,7 +490,7 @@ class PersonnaliseController extends Controller
                         'media_type' => $mediaType,
                     ]);
                 } else {
-                    // Optionnel: log ou ajouter un message d'erreur si besoin
+                    // Optionnel
                     // \Log::error("Le fichier média n'a pas été enregistré: $path");
                     continue;
                 }
@@ -1066,1011 +1069,229 @@ class PersonnaliseController extends Controller
      * Récupérer tous les fandoms
      * Route: GET /api/fandoms
      */
-    public function getFandoms()
-    {
-        $user = Auth::user();
+    public function getFandoms(Request $request)
+     {
+        // Charger members + sous-catégorie + catégorie pour retourner les noms
+        $fandoms = Fandom::with(['members', 'subcategory.category'])->orderBy('created_at', 'desc')->get();
 
-        // Charger la relation subcategory et le nombre de posts/members pour éviter les N+1
-        $fandoms = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->get();
+        $items = $fandoms->map(function ($fandom) {
+            // Trouver le membre modérateur ou admin
+            $moderatorMember = $fandom->members->firstWhere('role', 'moderator') ?? $fandom->members->firstWhere('role', 'admin') ?? $fandom->members->first();
 
-        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
-        $userMemberships = [];
-        if ($user) {
-            $memberships = \App\Models\Member::where('user_id', $user->id)->get();
-            foreach ($memberships as $membership) {
-                $userMemberships[$membership->fandom_id] = $membership->role;
-            }
-        }
-
-        // Retourner tous les champs du modèle Fandom (sans les lister manuellement)
-        // on convertit chaque modèle en tableau puis on ajoute les compteurs et une sous-catégorie minimale
-        $formatted = $fandoms->map(function ($f) use ($userMemberships) {
-            $attrs = $f->toArray();
-            // s'assurer que les compteurs sont présents
-            $attrs['posts_count'] = $f->posts_count ?? 0;
-            $attrs['members_count'] = $f->members_count ?? 0;
-
-            // Ajouter les informations de membership
-            $attrs['is_member'] = isset($userMemberships[$f->id]);
-            $attrs['member_role'] = $userMemberships[$f->id] ?? null;
-
-            // réduire la sous-catégorie à id/name pour éviter de renvoyer trop de données
-            if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
-                $attrs['subcategory'] = [
-                    'id' => $attrs['subcategory']['id'] ?? null,
-                    'name' => $attrs['subcategory']['name'] ?? null,
+            $moderator = null;
+            if ($moderatorMember) {
+                $moderator = [
+                    'user_id' => $moderatorMember->user_id ?? null,
+                    'role' => $moderatorMember->role ?? null,
                 ];
             }
 
-            return $attrs;
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'fandoms' => $formatted
-            ]
-        ]);
-    }
-
-    public function getTrendingFandoms()
-    {
-        $user = Auth::user();
-
-        // Charger la relation subcategory et le nombre de posts/members pour éviter les N+1
-        $fandoms = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->get();
-
-        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
-        $userMemberships = [];
-        if ($user) {
-            $memberships = \App\Models\Member::where('user_id', $user->id)->get();
-            foreach ($memberships as $membership) {
-                $userMemberships[$membership->fandom_id] = $membership->role;
+            // Counts optionnels
+            $num_members = null;
+            $num_posts = null;
+            if (method_exists($fandom, 'members')) {
+                try { $num_members = $fandom->members()->count(); } catch (\Throwable $e) { $num_members = null; }
             }
-        }
-
-        // Retourner tous les champs du modèle Fandom (sans les lister manuellement)
-        // on convertit chaque modèle en tableau puis on ajoute les compteurs et une sous-catégorie minimale
-        $formatted = $fandoms->map(function ($f) use ($userMemberships) {
-            $attrs = $f->toArray();
-            // s'assurer que les compteurs sont présents
-            $attrs['posts_count'] = $f->posts_count ?? 0;
-            $attrs['members_count'] = $f->members_count ?? 0;
-
-            // Ajouter les informations de membership
-            $attrs['is_member'] = isset($userMemberships[$f->id]);
-            $attrs['member_role'] = $userMemberships[$f->id] ?? null;
-
-            // réduire la sous-catégorie à id/name pour éviter de renvoyer trop de données
-            if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
-                $attrs['subcategory'] = [
-                    'id' => $attrs['subcategory']['id'] ?? null,
-                    'name' => $attrs['subcategory']['name'] ?? null,
-                ];
+            if (method_exists($fandom, 'posts')) {
+                try { $num_posts = $fandom->posts()->count(); } catch (\Throwable $e) { $num_posts = null; }
             }
 
-            return $attrs;
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'fandoms' => $formatted
-            ]
-        ]);
-    }
-
-    /**
-     * Rechercher des fandoms par q
-     * Route: GET /api/fandoms/search?q=QUERY
-     */
-    public function searchFandoms(Request $request)
-    {
-        $user = Auth::user();
-        $q = $request->get('q', '');
-
-        // base query: eager load subcategory and include counts
-        $query = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members']);
-
-        if (!empty($q)) {
-            // recherche sur le nom et la description
-            $query->where(function ($builder) use ($q) {
-                $builder->where('name', 'like', "%{$q}%")
-                        ->orWhere('description', 'like', "%{$q}%");
-            });
-        }
-
-        $fandoms = $query->get();
-
-        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
-        $userMemberships = [];
-        if ($user) {
-            $memberships = \App\Models\Member::where('user_id', $user->id)->get();
-            foreach ($memberships as $membership) {
-                $userMemberships[$membership->fandom_id] = $membership->role;
-            }
-        }
-
-        $formatted = $fandoms->map(function ($f) use ($userMemberships) {
-            $attrs = $f->toArray();
-            $attrs['posts_count'] = $f->posts_count ?? 0;
-            $attrs['members_count'] = $f->members_count ?? 0;
-
-            // Ajouter les informations de membership
-            $attrs['is_member'] = isset($userMemberships[$f->id]);
-            $attrs['member_role'] = $userMemberships[$f->id] ?? null;
-
-            if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
-                $attrs['subcategory'] = [
-                    'id' => $attrs['subcategory']['id'] ?? null,
-                    'name' => $attrs['subcategory']['name'] ?? null,
-                ];
-            }
-            return $attrs;
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'fandoms' => $formatted,
-                'query' => $q
-            ]
-        ]);
-    }
-
-
-        /**
-     * Récupérer les fandoms d'une sous-catégorie
-     * Route: GET /api/subcategories/{subcategoryId}/fandoms
-     */
-
-
-    /**
-     * Récupérer un fandom par id et inclure le statut du member de l'utilisateur authentifié
-     * Route: GET /api/fandoms/{fandom_id} (route already registered)
-     */
-    public function getfandombyId($fandomId, Request $request)
-    {
-        $user = Auth::user();
-
-        $fandom = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->find($fandomId);
-        if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
-        }
-
-        $attrs = $fandom->toArray();
-        $attrs['posts_count'] = $fandom->posts_count ?? 0;
-        $attrs['members_count'] = $fandom->members_count ?? 0;
-
-        if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
-            $attrs['subcategory'] = [
-                'id' => $attrs['subcategory']['id'] ?? null,
-                'name' => $attrs['subcategory']['name'] ?? null,
+            return [
+                'id' => $fandom->id,
+                'name' => $fandom->name,
+                // Retourner les noms au lieu des ids
+                'category' => $fandom->subcategory && $fandom->subcategory->category ? $fandom->subcategory->category->name : null,
+                'subcategory' => $fandom->subcategory ? $fandom->subcategory->name : null,
+                'description' => $fandom->description ?? null,
+                'image' => $this->makeImageUrl($fandom->cover_image ?? $fandom->logo_image ?? null),
+                'date' => $fandom->created_at ? $fandom->created_at->toISOString() : null,
+                'moderator' => $moderator,
+                'num_members' => $num_members,
+                'num_posts' => $num_posts,
             ];
-        }
+        })->toArray();
 
-        // Default membership info
-        $attrs['is_member'] = false;
-        $attrs['member_role'] = null;
-
-        if ($user) {
-            $member = \App\Models\Member::where('user_id', $user->id)->where('fandom_id', $fandom->id)->first();
-            if ($member) {
-                $attrs['is_member'] = true;
-                $attrs['member_role'] = $member->role;
-            }
-        }
-
-        return response()->json(['success' => true, 'data' => ['fandom' => $attrs]]);
+        return response()->json(['success' => true, 'data' => ['fandoms' => $items]]);
     }
 
     /**
-     * Permettre à un utilisateur authentifié de rejoindre un fandom
-     * Route: POST /api/Y/fandoms/{fandom_id}/join
+     * Récupérer un fandom par id (simplifié)
+     * Route: GET /api/fandoms/{id}
      */
-    public function joinFandom($fandom_id, Request $request)
+    public function showFandom($idOrHandle)
     {
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
+        // Accepter soit un id numérique soit un nom/handle (ex: "Test")
+        $key = urldecode($idOrHandle);
 
-        // Résoudre le fandom par id
-        $fandom = \App\Models\Fandom::find((int) $fandom_id);
+        // Essayer par id d'abord (gère les valeurs numériques)
+        $fandom = Fandom::with(['members', 'subcategory.category'])->find($key);
 
+        // Si non trouvé, tenter par nom (insensible à la casse)
         if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
-        }
-
-        // Vérifier si l'utilisateur est déjà membre
-        $existing = \App\Models\Member::where('user_id', $user->id)->where('fandom_id', $fandom->id)->first();
-        if ($existing) {
-            return response()->json(['success' => false, 'message' => 'Vous êtes déjà membre de ce fandom'], 409);
-        }
-
-        // Créer l'enregistrement de member (role par défaut: member)
-        $member = \App\Models\Member::create([
-            'user_id' => $user->id,
-            'fandom_id' => $fandom->id,
-            'role' => 'member',
-        ]);
-
-        if (!$member) {
-            return response()->json(['success' => false, 'message' => 'Impossible de rejoindre le fandom'], 500);
-        }
-
-        return response()->json(['success' => true, 'message' => 'Vous avez rejoint le fandom avec succès.'], 201);
-    }
-
-    /**
-     * Permettre à un utilisateur authentifié de quitter un fandom
-     * Route: DELETE /api/Y/fandoms/{fandom_id}/leave
-     */
-    public function leaveFandom($fandom_id, Request $request)
-    {
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
-
-        // Résoudre le fandom par id
-        $fandom = \App\Models\Fandom::find((int) $fandom_id);
-
-        if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
-        }
-
-        // Vérifier si l'utilisateur est membre du fandom
-        $existing = \App\Models\Member::where('user_id', $user->id)->where('fandom_id', $fandom->id)->first();
-        if (!$existing) {
-            return response()->json(['success' => false, 'message' => 'Vous n\'êtes pas membre de ce fandom'], 404);
-        }
-
-        // Empêcher l'admin de quitter son propre fandom s'il est le seul admin
-        if ($existing->role === 'admin') {
-            $adminCount = \App\Models\Member::where('fandom_id', $fandom->id)
-                ->where('role', 'admin')
-                ->count();
-
-            if ($adminCount === 1) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Impossible de quitter le fandom. Vous êtes le seul administrateur. Transférez d\'abord les droits d\'administration à un autre membre.'
-                ], 403);
-            }
-        }
-
-        // Supprimer l'enregistrement de member
-        $existing->delete();
-
-        return response()->json(['success' => true, 'message' => 'Vous avez quitté le fandom avec succès.'], 200);
-    }
-
-    /**
-     * Permettre à un administrateur de changer le rôle d'un membre dans un fandom
-     * Route: PUT /api/Y/fandoms/{fandom_id}/members/{user_id}/role
-     */
-    public function changeMemberRole($fandom_id, $user_id, Request $request)
-    {
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
-
-        // Validation des données
-        $request->validate([
-            'role' => 'required|string|in:member,moderator,admin'
-        ]);
-
-        $newRole = $request->input('role');
-
-        // Résoudre le fandom par id
-        $fandom = \App\Models\Fandom::find((int) $fandom_id);
-        if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
-        }
-
-        // Vérifier que l'utilisateur actuel est administrateur du fandom
-        $currentUserMembership = \App\Models\Member::where('user_id', $user->id)
-            ->where('fandom_id', $fandom->id)
-            ->where('role', 'admin')
-            ->first();
-
-        if (!$currentUserMembership) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Access denied. Only administrators can change member roles.'
-            ], 403);
-        }
-
-        // Vérifier que l'utilisateur cible existe et est membre du fandom
-        $targetUser = \App\Models\User::find((int) $user_id);
-        if (!$targetUser) {
-            return response()->json(['success' => false, 'message' => 'Target user not found'], 404);
-        }
-
-        $targetMembership = \App\Models\Member::where('user_id', $targetUser->id)
-            ->where('fandom_id', $fandom->id)
-            ->first();
-
-        if (!$targetMembership) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Target user is not a member of this fandom'
-            ], 404);
-        }
-
-        // Empêcher l'admin de se rétrograder s'il est le seul admin
-        if ($targetUser->id === $user->id && $targetMembership->role === 'admin' && $newRole !== 'admin') {
-            $adminCount = \App\Models\Member::where('fandom_id', $fandom->id)
-                ->where('role', 'admin')
-                ->count();
-
-            if ($adminCount === 1) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot demote yourself. You are the only administrator. Promote another member to admin first.'
-                ], 403);
-            }
-        }
-
-        // Mettre à jour le rôle
-        $oldRole = $targetMembership->role;
-        $targetMembership->role = $newRole;
-        $targetMembership->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => "Member role updated successfully from '{$oldRole}' to '{$newRole}'",
-            'data' => [
-                'user_id' => $targetUser->id,
-                'username' => $targetUser->name,
-                'old_role' => $oldRole,
-                'new_role' => $newRole,
-                'fandom_id' => $fandom->id,
-                'fandom_name' => $fandom->name
-            ]
-        ], 200);
-    }
-
-    /**
-     * Supprimer un membre d'un fandom (admin seulement)
-     * Route: DELETE /api/Y/fandoms/{fandom_id}/members/{user_id}
-     */
-    public function removeMemberFromFandom($fandom_id, $user_id)
-    {
-        $admin = Auth::user();
-        if (!$admin) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
-
-        // Vérifier que le fandom existe
-        $fandom = \App\Models\Fandom::find($fandom_id);
-        if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
-        }
-
-        // Vérifier que l'admin est un administrateur de ce fandom
-        $adminMembership = \App\Models\Member::where('user_id', $admin->id)
-            ->where('fandom_id', $fandom_id)
-            ->where('role', 'admin')
-            ->first();
-
-        if (!$adminMembership) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Access denied. You must be an admin of this fandom.'
-            ], 403);
-        }
-
-        // Vérifier que l'utilisateur cible existe
-        $targetUser = \App\Models\User::find($user_id);
-        if (!$targetUser) {
-            return response()->json(['success' => false, 'message' => 'User not found'], 404);
-        }
-
-        // Vérifier que l'utilisateur cible est membre du fandom
-        $targetMembership = \App\Models\Member::where('user_id', $user_id)
-            ->where('fandom_id', $fandom_id)
-            ->first();
-
-        if (!$targetMembership) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User is not a member of this fandom'
-            ], 404);
-        }
-
-        // Empêcher l'admin de se supprimer lui-même
-        if ($admin->id == $user_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You cannot remove yourself from the fandom'
-            ], 403);
-        }
-
-        // Compter le nombre d'admins restants
-        $adminCount = \App\Models\Member::where('fandom_id', $fandom_id)
-            ->where('role', 'admin')
-            ->count();
-
-        // Si l'utilisateur cible est admin et qu'il est le seul admin, empêcher la suppression
-        if ($targetMembership->role === 'admin' && $adminCount <= 1) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot remove the last admin from the fandom'
-            ], 403);
-        }
-
-        // Supprimer le membre
-        $targetMembership->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Member removed successfully',
-            'data' => [
-                'removed_user_id' => $targetUser->id,
-                'removed_username' => $targetUser->name,
-                'removed_role' => $targetMembership->role,
-                'fandom_id' => $fandom->id,
-                'fandom_name' => $fandom->name
-            ]
-        ], 200);
-    }
-
-    /**
-     * Permettre aux membres d'un fandom d'ajouter un post dans ce fandom
-     * Route: POST /api/Y/fandoms/{fandom_id}/posts
-     */
-    public function addPostToFandom($fandom_id, Request $request)
-    {
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
-
-        // Vérifier que le fandom existe
-        $fandom = \App\Models\Fandom::find($fandom_id);
-        if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
-        }
-
-        // Vérifier que l'utilisateur est membre du fandom
-        $membership = \App\Models\Member::where('user_id', $user->id)
-            ->where('fandom_id', $fandom_id)
-            ->first();
-
-        if (!$membership) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Access denied. You must be a member of this fandom to post.'
-            ], 403);
-        }
-
-        $validated = $request->validate([
-            'schedule_at' => 'nullable|date',
-            'description' => 'nullable|string',
-            'content_status' => 'required|in:draft,published,archived',
-            'medias' => 'nullable|array',
-            'medias.*' => 'file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
-            'tags' => 'nullable|array',
-            'tags.*' => 'string|max:255',
-        ]);
-
-        $validated['user_id'] = $user->id;
-        $validated['fandom_id'] = $fandom_id; // Utiliser fandom_id au lieu de subcategory_id
-        $tags = $validated['tags'] ?? [];
-        unset($validated['tags']);
-        $post = Post::create($validated);
-
-        // Associer les tags si fournis
-        if (!empty($tags)) {
-            foreach ($tags as $tagName) {
-                $tag = \App\Models\Tag::firstOrCreate(['tag_name' => $tagName]);
-                $post->tags()->syncWithoutDetaching($tag->id);
-            }
-        }
-
-        $mediaFiles = $request->file('medias');
-        if (is_iterable($mediaFiles)) {
-            foreach ($mediaFiles as $file) {
-                $extension = strtolower($file->getClientOriginalExtension());
-
-                // Détecte type média selon extension
-                $imageExtensions = ['jpg', 'jpeg', 'png'];
-                $videoExtensions = ['mp4', 'mov'];
-
-                if (in_array($extension, $imageExtensions)) {
-                    $mediaType = 'image';
-                    $folder = 'posts/images';
-                } elseif (in_array($extension, $videoExtensions)) {
-                    $mediaType = 'video';
-                    $folder = 'posts/videos';
-                } else {
-                    // Extension non supportée (ne devrait pas arriver à cause de la validation)
-                    continue;
-                }
-
-                $path = $file->store($folder, 'public');
-
-                // Vérifier si le fichier est bien enregistré dans storage
-                if (Storage::disk('public')->exists($path)) {
-                    $post->medias()->create([
-                        'file_path' => $path,
-                        'media_type' => $mediaType,
-                    ]);
-                } else {
-                    // Optionnel: log ou ajouter un message d'erreur si besoin
-                    // \Log::error("Le fichier média n'a pas été enregistré: $path");
-                    continue;
-                }
-            }
-        }
-
-        // Charger les tags pour la réponse
-        $post->load('tags');
-        return response()->json([
-            'success' => true,
-            'message' => 'Post créé avec succès dans le fandom.',
-            'post' => [
-                'id' => $post->id,
-                'description' => $post->description,
-                'fandom_id' => $post->fandom_id,
-                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
-                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
-                'content_status' => $post->content_status,
-                'schedule_at' => $post->schedule_at,
-                'createdAt' => $post->created_at ? $post->created_at->toISOString() : null
-            ]
-        ], 201);
-    }
-
-    /**
-     * Permettre aux membres d'un fandom de mettre à jour leur post
-     * Route: PUT /api/Y/fandoms/{fandom_id}/posts/{post_id}
-     */
-    public function updatePostInFandom($fandom_id, $post_id, Request $request)
-    {
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
-
-        // Vérifier que le fandom existe
-        $fandom = \App\Models\Fandom::find($fandom_id);
-        if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
-        }
-
-        // Trouver le post
-        $post = \App\Models\Post::where('id', $post_id)
-            ->where('fandom_id', $fandom->id)
-            ->first();
-
-        if (!$post) {
-            return response()->json(['success' => false, 'message' => 'Post not found in this fandom'], 404);
-        }
-
-        // Vérifier les permissions (propriétaire du post ou admin/moderator du fandom)
-        $canEdit = false;
-        if ($post->user_id === $user->id) {
-            $canEdit = true; // Propriétaire du post
-        } else {
-            // Vérifier si l'utilisateur est admin ou moderator du fandom
-            $membership = \App\Models\Member::where('user_id', $user->id)
-                ->where('fandom_id', $fandom->id)
-                ->whereIn('role', ['admin', 'moderator'])
+            $fandom = Fandom::with(['members', 'subcategory.category'])
+                ->whereRaw('LOWER(name) = ?', [strtolower($key)])
+                ->orWhere('name', $key)
                 ->first();
-            if ($membership) {
-                $canEdit = true;
-            }
         }
 
-        if (!$canEdit) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Access denied. You can only edit your own posts or you must be an admin/moderator.'
-            ], 403);
-        }
-
-        $validated = $request->validate([
-            'schedule_at' => 'nullable|date',
-            'description' => 'nullable|string',
-            'content_status' => 'sometimes|in:draft,published,archived',
-
-            'tags' => 'nullable|array',
-            'tags.*' => 'string|max:255',
-        ]);
-
-        // Mettre à jour les champs fournis
-        $updateData = [];
-        if ($request->has('description')) $updateData['description'] = $request->description;
-        if ($request->has('content_status')) $updateData['content_status'] = $request->content_status;
-        if ($request->has('schedule_at')) $updateData['schedule_at'] = $request->schedule_at;
-
-        if (!empty($updateData)) {
-            $post->update($updateData);
-        }
-
-        // Gérer les tags si fournis
-        if ($request->has('tags')) {
-            $tags = $validated['tags'] ?? [];
-            // Supprimer les anciens tags
-            $post->tags()->detach();
-            // Ajouter les nouveaux tags
-            if (!empty($tags)) {
-                foreach ($tags as $tagName) {
-                    $tag = \App\Models\Tag::firstOrCreate(['tag_name' => $tagName]);
-                    $post->tags()->syncWithoutDetaching($tag->id);
-                }
-            }
-        }
-
-        // Gérer l'upload de nouveaux médias (ajoute, ne supprime pas les anciens)
-        // Charger les tags pour la réponse
-        $post->load('tags');
-        return response()->json([
-            'success' => true,
-            'message' => 'Post créé avec succès dans le fandom.',
-            'post' => [
-                'id' => $post->id,
-                'description' => $post->description,
-                'fandom_id' => $post->fandom_id,
-                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
-                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
-                'content_status' => $post->content_status,
-                'schedule_at' => $post->schedule_at,
-                'createdAt' => $post->created_at ? $post->created_at->toISOString() : null
-            ]
-        ], 201);
-    }
-
-    /**
-     * Permettre aux membres d'un fandom de supprimer leur post
-     * Route: DELETE /api/Y/fandoms/{fandom_id}/posts/{post_id}
-     */
-    public function deletePostInFandom($fandom_id, $post_id, Request $request)
-    {
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
-
-        // Résoudre le fandom par id
-        $fandom = \App\Models\Fandom::find((int) $fandom_id);
         if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+            return response()->json(['success' => false, 'message' => 'Fandom non trouvé'], 404);
         }
 
-        // Trouver le post
-        $post = \App\Models\Post::where('id', $post_id)
-            ->where('fandom_id', $fandom->id)
-            ->first();
-
-        if (!$post) {
-            return response()->json(['success' => false, 'message' => 'Post not found in this fandom'], 404);
+        $moderatorMember = $fandom->members->firstWhere('role', 'moderator') ?? $fandom->members->firstWhere('role', 'admin') ?? $fandom->members->first();
+        $moderator = null;
+        if ($moderatorMember) {
+            $moderator = [
+                'user_id' => $moderatorMember->user_id ?? null,
+                'role' => $moderatorMember->role ?? null,
+            ];
         }
 
-        // Vérifier les permissions (propriétaire du post ou admin/moderator du fandom)
-        $canDelete = false;
-        if ($post->user_id === $user->id) {
-            $canDelete = true; // Propriétaire du post
-        } else {
-            // Vérifier si l'utilisateur est admin ou moderator du fandom
-            $membership = \App\Models\Member::where('user_id', $user->id)
-                ->where('fandom_id', $fandom->id)
-                ->whereIn('role', ['admin', 'moderator'])
-                ->first();
-            if ($membership) {
-                $canDelete = true;
-            }
+        $num_members = null;
+        $num_posts = null;
+        if (method_exists($fandom, 'members')) {
+            try { $num_members = $fandom->members()->count(); } catch (\Throwable $e) { $num_members = null; }
+        }
+        if (method_exists($fandom, 'posts')) {
+            try { $num_posts = $fandom->posts()->count(); } catch (\Throwable $e) { $num_posts = null; }
         }
 
-        if (!$canDelete) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Access denied. You can only delete your own posts or you must be an admin/moderator.'
-            ], 403);
-        }
+        $out = [
+            'id' => $fandom->id,
+            'name' => $fandom->name,
+            'category' => $fandom->subcategory && $fandom->subcategory->category ? $fandom->subcategory->category->name : null,
+            'subcategory' => $fandom->subcategory ? $fandom->subcategory->name : null,
+            'description' => $fandom->description ?? null,
+            'image' => $this->makeImageUrl($fandom->cover_image ?? $fandom->logo_image ?? null),
+            'date' => $fandom->created_at ? $fandom->created_at->toISOString() : null,
+            'moderator' => $moderator,
+            'num_members' => $num_members,
+            'num_posts' => $num_posts,
+        ];
 
-        // Supprimer les médias associés
-        $post->medias()->delete();
-
-        // Supprimer les tags associés
-        $post->tags()->detach();
-
-        // Supprimer le post
-        $post->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Post deleted successfully'
-        ], 200);
+        return response()->json(['success' => true, 'fandom' => $out]);
     }
 
     /**
-     * Obtenir les posts d'un fandom
-     * Route: GET /api/fandoms/{fandom_id}/posts
-     */
-    public function getFandomPosts($fandomId, Request $request)
-    {
-        $page = max(1, (int) $request->get('page', 1));
-        $limit = min(100, max(1, (int) $request->get('limit', 10)));
-
-        $fandom = \App\Models\Fandom::find($fandomId);
-        if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
-        }
-
-        $posts = \App\Models\Post::where('fandom_id', $fandomId)
-            ->with(['medias', 'tags', 'user'])
-            ->orderBy('created_at', 'desc')
-            ->paginate($limit, ['*'], 'page', $page);
-
-        $formatted = collect($posts->items())->map(function ($post) {
-            return [
-                'id' => $post->id,
-                'description' => $post->description,
-                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
-                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
-                'user' => $post->user ? $post->user->toArray() : null,
-                'likes_count' => method_exists($post, 'favorites') ? $post->favorites()->count() : 0,
-                'comments_count' => method_exists($post, 'comments') ? $post->comments()->count() : 0,
-                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
-            ];
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'posts' => $formatted,
-                'pagination' => [
-                    'page' => $posts->currentPage(),
-                    'per_page' => $posts->perPage(),
-                    'total' => $posts->total(),
-                    'last_page' => $posts->lastPage(),
-                    'has_more' => $posts->hasMorePages(),
-                ]
-            ]
-        ]);
-    }
-
-    /**
-     * Obtenir les membres d'un fandom
-     * Route: GET /api/fandoms/{fandom_id}/members
-     */
-    public function getFandomMembers($fandomId, Request $request)
-    {
-        $page = max(1, (int) $request->get('page', 1));
-        $limit = min(100, max(1, (int) $request->get('limit', 20)));
-
-        $fandom = \App\Models\Fandom::find($fandomId);
-        if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
-        }
-
-        // join members with users to get user info and role
-        $membersQuery = \App\Models\Member::where('fandom_id', $fandomId)->with('user');
-
-        $paginator = $membersQuery->paginate($limit, ['*'], 'page', $page);
-
-        $members = collect($paginator->items())->map(function ($m) {
-            $userArr = $m->user ? $m->user->toArray() : null;
-            return [
-                'member_id' => $m->id,
-                'user' => $userArr,
-                'member_role' => $m->role,
-                'joined_at' => $m->created_at ? $m->created_at->toISOString() : null,
-            ];
-        })->values();
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'members' => $members,
-                'pagination' => [
-                    'page' => $paginator->currentPage(),
-                    'per_page' => $paginator->perPage(),
-                    'total' => $paginator->total(),
-                    'last_page' => $paginator->lastPage(),
-                    'has_more' => $paginator->hasMorePages(),
-                ]
-            ]
-        ]);
-    }
-    public function getMyFandoms(Request $request)
-    {
-        $user = $request->user();
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 401);
-        }
-
-        $page = $request->get('page', 1);
-        $limit = $request->get('limit', 10);
-        $role = $request->get('role'); // Filtrer par rôle si fourni
-
-        // Récupérer les membres (fandoms) de l'utilisateur avec pagination
-        $membersQuery = \App\Models\Member::where('user_id', $user->id)
-            ->with(['fandom.subcategory'])
-            ->orderBy('created_at', 'desc');
-
-        // Filtrer par rôle si fourni
-        if ($role) {
-            $membersQuery->where('role', $role);
-        }
-
-        $paginator = $membersQuery->paginate($limit, ['*'], 'page', $page);
-
-        // Formater les données
-        $userFandoms = collect($paginator->items())->map(function ($member) {
-            $fandom = $member->fandom;
-            if (!$fandom) {
-                return null;
-            }
-
-            return [
-                'membership_id' => $member->id,
-                'role' => $member->role,
-                'joined_at' => $member->created_at ? $member->created_at->toISOString() : null,
-                'fandom' => [
-                    'id' => $fandom->id,
-                    'name' => $fandom->name,
-                    'description' => $fandom->description,
-                    'cover_image' => $fandom->cover_image,
-                    'logo_image' => $fandom->logo_image,
-                    'subcategory' => $fandom->subcategory ? [
-                        'id' => $fandom->subcategory->id,
-                        'name' => $fandom->subcategory->name,
-                    ] : null,
-                    'posts_count' => $fandom->posts()->count(),
-                    'members_count' => $fandom->members()->count(),
-                    'created_at' => $fandom->created_at ? $fandom->created_at->toISOString() : null,
-                ]
-            ];
-        })->filter()->values(); // Filtrer les nulls
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'fandoms' => $userFandoms,
-                'pagination' => [
-                    'page' => $paginator->currentPage(),
-                    'per_page' => $paginator->perPage(),
-                    'total' => $paginator->total(),
-                    'last_page' => $paginator->lastPage(),
-                    'has_more' => $paginator->hasMorePages(),
-                ]
-            ]
-        ]);
-    }
-
-
-    /**
-     * Créer un nouveau fandom
-     * Route: POST /api/Y/fandoms
+     * Créer un fandom. Le body peut fournir uniquement moderator_user_id (integer).
+     * Route: POST /api/fandoms
+     * Required body: name
+     * Optional: description, cover_image (file ou URL), category_id, subcategory_id, date, user_id, moderator_user_id, role
      */
     public function createFandom(Request $request)
     {
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
-
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'subcategory_id' => 'required|integer|exists:subcategories,id',
-            // cover_image may be either an uploaded file or an external URL string
-            'cover_image' => ['nullable', function ($attribute, $value, $fail) use ($request) {
-                // If a file was uploaded under this key, validate it here
-                if ($request->hasFile('cover_image')) {
-                    $file = $request->file('cover_image');
-                    if (!$file->isValid()) {
-                        return $fail('Le fichier '.$attribute.' est invalide.');
-                    }
-                    $ext = strtolower($file->getClientOriginalExtension());
-                    $allowed = ['jpg','jpeg','png','gif','webp'];
-                    if (!in_array($ext, $allowed)) {
-                        return $fail('Le fichier '.$attribute.' doit être une image (jpg,jpeg,png,gif,webp).');
-                    }
-                    // max size ~8MB
-                    if ($file->getSize() > 8192 * 1024) {
-                        return $fail('Le fichier '.$attribute.' est trop volumineux.');
-                    }
-                } else {
-                    // if not a file, allow null or a valid URL string
-                    if (!empty($value) && !filter_var($value, FILTER_VALIDATE_URL)) {
-                        return $fail('Le champ '.$attribute.' doit être une URL valide ou un fichier image.');
-                    }
-                }
-            }],
-            // logo_image validation
-            'logo_image' => ['nullable', function ($attribute, $value, $fail) use ($request) {
-                // If a file was uploaded under this key, validate it here
-                if ($request->hasFile('logo_image')) {
-                    $file = $request->file('logo_image');
-                    if (!$file->isValid()) {
-                        return $fail('Le fichier '.$attribute.' est invalide.');
-                    }
-                    $ext = strtolower($file->getClientOriginalExtension());
-                    $allowed = ['jpg','jpeg','png','gif','webp'];
-                    if (!in_array($ext, $allowed)) {
-                        return $fail('Le fichier '.$attribute.' doit être une image (jpg,jpeg,png,gif,webp).');
-                    }
-                    // max size ~8MB
-                    if ($file->getSize() > 8192 * 1024) {
-                        return $fail('Le fichier '.$attribute.' est trop volumineux.');
-                    }
-                } else {
-                    // if not a file, allow null or a valid URL string
-                    if (!empty($value) && !filter_var($value, FILTER_VALIDATE_URL)) {
-                        return $fail('Le champ '.$attribute.' doit être une URL valide ou un fichier image.');
-                    }
-                }
-            }],
+            'image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'category_id' => 'nullable|integer|exists:categories,id',
+            'subcategory_id' => 'nullable|integer|exists:subcategories,id',
+            'date' => 'nullable|date',
+            'user_id' => 'nullable|integer|exists:users,id',
+            'moderator_user_id' => 'nullable|integer|exists:users,id',
+            'role' => 'nullable|string|in:moderator,admin',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+            return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $data = $validator->validated();
+        $moderatorUserId = $request->input('user_id') ?? $request->input('moderator_user_id');
+        $role = $request->input('role', 'moderator');
 
-        // If a cover image file is uploaded, store it in fandom_cover_image and prefer it
-        if ($request->hasFile('cover_image') && $request->file('cover_image')->isValid()) {
-            $path = $request->file('cover_image')->store('fandom_cover_image', 'public');
-            // store a web-accessible path like 'storage/...'
-            $data['cover_image'] = 'storage/' . $path;
-        }
-
-        // If caller provided a URL string in cover_image (and no file), keep it as-is
-        if (empty($data['cover_image']) && $request->filled('cover_image')) {
-            $data['cover_image'] = $request->input('cover_image');
-        }
-
-        // Handle logo_image upload
-        if ($request->hasFile('logo_image') && $request->file('logo_image')->isValid()) {
-            $path = $request->file('logo_image')->store('fandom_logo_image', 'public');
-            // store a web-accessible path like 'storage/...'
-            $data['logo_image'] = 'storage/' . $path;
-        }
-
-        // If caller provided a URL string in logo_image (and no file), keep it as-is
-        if (empty($data['logo_image']) && $request->filled('logo_image')) {
-            $data['logo_image'] = $request->input('logo_image');
-        }
-
-        $fandom = \App\Models\Fandom::create([
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'subcategory_id' => $data['subcategory_id'] ?? null,
-            'cover_image' => $data['cover_image'] ?? null,
-            'logo_image' => $data['logo_image'] ?? null,
-        ]);
-
-        if (!$fandom) {
-            return response()->json(['success' => false, 'message' => 'Impossible de créer le fandom'], 500);
-        }
-
-        // Ajouter le créateur comme membre avec le rôle admin
-        try {
-            $existingMember = \App\Models\Member::where('user_id', $user->id)->where('fandom_id', $fandom->id)->first();
-            if (!$existingMember) {
-                \App\Models\Member::create([
-                    'user_id' => $user->id,
-                    'fandom_id' => $fandom->id,
-                    'role' => 'admin',
-                ]);
+        $moderatorUser = null;
+        if ($moderatorUserId) {
+            $moderatorUser = \App\Models\User::find($moderatorUserId);
+            if (!$moderatorUser) {
+                return response()->json(['success' => false, 'message' => 'User not found'], 404);
             }
-        } catch (\Exception $e) {
-            // ne pas empêcher la création du fandom si l'ajout en membre échoue
-            // silent catch (no logging as requested)
+        } else {
+            $moderatorUser = Auth::user();
         }
 
-        return response()->json(['success' => true, 'message' => 'Fandom créé avec succès', 'data' => ['fandom' => $fandom]], 201);
+        // Ne pas inclure category_id dans les données envoyées à la table (pas de colonne dans la BDD)
+        $data = [
+            'name' => $request->input('name'),
+            'description' => $request->input('description') ?? null,
+            'subcategory_id' => $request->input('subcategory_id') ?? null,
+        ];
+
+        // Gérer l'image (upload ou URL) dans le champ 'image' -> stocker en base dans 'cover_image'
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            try {
+                $path = \Illuminate\Support\Facades\Storage::disk('public')->putFile('fandoms/images', $request->file('image'));
+                if ($path) {
+                    $data['cover_image'] = 'storage/' . $path;
+                } else {
+                    return response()->json(['success' => false, 'message' => 'Unable to store uploaded image'], 500);
+                }
+            } catch (\Throwable $e) {
+                return response()->json(['success' => false, 'message' => 'Image upload error', 'error' => $e->getMessage()], 500);
+            }
+        } elseif ($request->filled('image')) {
+            $data['cover_image'] = $request->input('image');
+        }
+
+        if ($request->filled('date')) {
+            try {
+                $data['created_at'] = \Carbon\Carbon::parse($request->input('date'));
+            } catch (\Throwable $e) {}
+        }
+
+        try {
+            \DB::beginTransaction();
+            $fandom = Fandom::create($data);
+            if ($moderatorUser) {
+                $existing = \App\Models\Member::where('user_id', $moderatorUser->id)
+                    ->where('fandom_id', $fandom->id)
+                    ->first();
+                if ($existing) {
+                    if (($existing->role ?? '') !== $role) {
+                        $existing->role = $role;
+                        $existing->save();
+                    }
+                } else {
+                    \App\Models\Member::create([
+                        'user_id' => $moderatorUser->id,
+                        'fandom_id' => $fandom->id,
+                        'role' => $role,
+                    ]);
+                }
+            }
+            \DB::commit();
+        } catch (\Throwable $e) {
+            \DB::rollBack();
+            return response()->json(['success' => false, 'message' => 'Unable to create fandom', 'error' => $e->getMessage()], 500);
+        }
+
+        // Recharger relations pour pouvoir retourner les noms
+        $fandom->load(['subcategory.category', 'members']);
+
+        $moderatorMember = $fandom->members()->where('role', 'moderator')->orWhere('role', 'admin')->where('user_id', $moderatorUser?->id ?? null)->first();
+        if (!$moderatorMember && $moderatorUser) {
+            $moderatorMember = $fandom->members()->where('user_id', $moderatorUser->id)->first();
+        }
+        $moderator = null;
+        if ($moderatorMember) {
+            $moderator = [
+                'user_id' => $moderatorMember->user_id ?? null,
+                'role' => $moderatorMember->role ?? null,
+            ];
+        }
+
+        $out = [
+            'id' => $fandom->id,
+            'name' => $fandom->name,
+            // Retourner noms au lieu des ids
+            'category' => $fandom->subcategory && $fandom->subcategory->category ? $fandom->subcategory->category->name : null,
+            'subcategory' => $fandom->subcategory ? $fandom->subcategory->name : null,
+            'description' => $fandom->description ?? null,
+            'image' => $this->makeImageUrl($fandom->cover_image ?? $fandom->logo_image ?? null),
+            'date' => $fandom->created_at ? $fandom->created_at->toISOString() : null,
+            'moderator' => $moderator,
+        ];
+
+        return response()->json(['success' => true, 'fandom' => $out], 201);
     }
 
     /**
@@ -2180,572 +1401,28 @@ class PersonnaliseController extends Controller
         return response()->json(['success' => true, 'message' => 'Fandom mis à jour avec succès', 'data' => ['fandom' => $fandom]], 200);
     }
 
-    public function getAllCategories() {
-        $categories = Category::all();
-        return response()->json($categories);
-    }
-
-
-    // ====================
-    // HASHTAGS
-    // ====================
-    public function getHashtagPosts($hashtag) {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'posts' => [],
-                'stats' => [
-                    'totalPosts' => 0,
-                    'growth' => '+0%',
-                    'category' => 'General'
-                ]
-            ]
-        ]);
-    }
-
-    // ====================
-    // STORE / E-COMMERCE
-    // ====================
-    public function getStoreCategories() {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'categories' => []
-            ]
-        ]);
-    }
-    public function getStoreBrands() {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'brands' => []
-            ]
-        ]);
-    }
-    public function addToCart(Request $request) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Product added to cart successfully',
-            'data' => [
-                'cartItem' => [
-                    'id' => 1,
-                    'productId' => $request->productId ?? 1,
-                    'quantity' => $request->quantity ?? 1,
-                    'size' => $request->size ?? 'L',
-                    'color' => $request->color ?? 'Black',
-                    'price' => 45.99,
-                    'subtotal' => 45.99
-                ],
-                'cartTotal' => 45.99,
-                'itemsCount' => 1
-            ]
-        ]);
-    }
-    public function addToWishlist($productId) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Product added to wishlist',
-            'data' => [
-                'wishlistId' => 1,
-                'productId' => $productId,
-                'addedAt' => now()->toISOString()
-            ]
-        ]);
-    }
-    public function getCart() {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'items' => [],
-                'summary' => [
-                    'subtotal' => 0,
-                    'shipping' => 0,
-                    'tax' => 0,
-                    'total' => 0,
-                    'itemsCount' => 0
-                ],
-                'estimatedDelivery' => now()->addDays(5)->toDateString()
-            ]
-        ]);
-    }
-    public function updateCartItem($itemId, Request $request) {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'item' => [
-                    'id' => $itemId,
-                    'quantity' => $request->quantity ?? 1,
-                    'subtotal' => 45.99
-                ],
-                'cartTotal' => 45.99
-            ]
-        ]);
-    }
-    public function removeCartItem($itemId) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Item removed from cart',
-            'data' => [
-                'removedItemId' => $itemId,
-                'cartTotal' => 0,
-                'itemsCount' => 0
-            ]
-        ]);
-    }
-    public function createOrder(Request $request) {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'order' => [
-                    'id' => 'ORD-2024-001',
-                    'status' => 'processing',
-                    'total' => 45.99,
-                    'estimatedDelivery' => now()->addDays(7)->toDateString(),
-                    'createdAt' => now()->toISOString()
-                ]
-            ]
-        ]);
-    }
-    public function getOrders() {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'orders' => [],
-                'pagination' => [
-                    'page' => 1,
-                    'limit' => 10,
-                    'total' => 0
-                ]
-            ]
-        ]);
-    }
-    public function cancelOrder($orderId, Request $request) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Order cancelled successfully',
-            'data' => [
-                'orderId' => $orderId,
-                'status' => 'cancelled',
-                'refundAmount' => 45.99,
-                'refundEstimate' => '3-5 business days'
-            ]
-        ]);
-    }
-    public function getOrderDetails($orderId) {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'order' => [
-                    'id' => $orderId,
-                    'status' => 'delivered',
-                    'total' => 45.99,
-                    'orderDate' => now()->subDays(5)->toISOString(),
-                    'deliveredDate' => now()->toISOString(),
-                    'trackingNumber' => 'TN123456789',
-                    'estimatedDelivery' => now()->toISOString(),
-                    'items' => []
-                ]
-            ]
-        ]);
-    }
-    public function reviewOrder($orderId, Request $request) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Review submitted successfully',
-            'data' => [
-                'reviewId' => 1,
-                'rating' => $request->rating ?? 5,
-                'submittedAt' => now()->toISOString()
-            ]
-        ]);
-    }
-
     /**
-     * Route: POST /api/upload/image
-     * Upload an image and return its URL
+     * Supprimer un fandom (admin seulement)
+     * Route: DELETE /api/Y/fandoms/{id}
      */
-    public function uploadImage(Request $request)
+    public function deleteFandom($id)
     {
-        if (!$request->hasFile('image')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No image file provided.'
-            ], 422);
-        }
-
-        $file = $request->file('image');
-        if (!$file->isValid()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid image file.'
-            ], 422);
-        }
-
-        $path = $file->store('uploads', 'public');
-        $url = asset('storage/' . $path);
-
-        return response()->json([
-            'success' => true,
-            'url' => $url
-        ]);
+        $f = \App\Models\Fandom::find($id);
+        if (!$f) return response()->json(['success' => false, 'error' => 'Fandom not found'], 404);
+        $f->delete();
+        return response()->json(['success' => true, 'message' => 'Fandom deleted']);
     }
-
     /**
-     * Obtenir le contenu d'une catégorie
-     * Route: GET /api/categories/{category}/content
+     * Convertit un chemin d'image en URL complète si nécessaire
      */
-    public function getCategoryContent($category, Request $request)
+    protected function makeImageUrl($path)
     {
-        // Recherche la catégorie par ID ou slug
-        $cat = Category::where('id', $category)->orWhere('slug', $category)->first();
-        if (!$cat) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Catégorie non trouvée'
-            ], 404);
+        if (empty($path)) return null;
+        // Si c'est déjà une URL complète, la retourner telle quelle
+        if (preg_match('/^https?:\/\//i', $path)) {
+            return $path;
         }
-        // Exemple: retourne les posts associés à la catégorie
-        $posts = Post::where('category_id', $cat->id)->get();
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'category' => $cat->name,
-                'posts' => $posts
-            ]
-        ]);
+        // Si le chemin commence par 'storage/' ou '/' on construit l'URL complète
+        return url($path);
     }
-
-    /**
-     * Obtenir la liste des produits du store
-     * Route: GET /api/store/products
-     */
-    public function getStoreProducts(Request $request)
-    {
-        // Exemple: retourne tous les produits
-        $products = Product::all();
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'products' => $products
-            ]
-        ]);
-    }
-
-    /**
-     * Sauvegarder un post
-     * Route: POST /api/posts/{postId}/save
-     */
-    public function savePost(Request $request)
-    {
-        $request->validate([
-            'post_id' => 'required|exists:posts,id',
-        ]);
-
-        $user = $request->user();
-        $postId = $request->post_id;
-
-        // Vérifier si le post existe
-        $post = Post::find($postId);
-        if (!$post) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Post not found',
-            ], 404);
-        }
-
-        // Vérifier si le post est déjà sauvegardé
-        if ($user->hasSavedPost($postId)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Post is already saved',
-            ], 409);
-        }
-
-        // Sauvegarder le post
-        $user->savedPosts()->attach($postId);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Post saved successfully',
-        ]);
-    }
-
-    /**
-     * Retirer un post des sauvegardés
-     * Route: DELETE /api/posts/{postId}/unsave
-     */
-    public function unsavePost(Request $request)
-    {
-        $request->validate([
-            'post_id' => 'required|exists:posts,id',
-        ]);
-
-        $user = $request->user();
-        $postId = $request->post_id;
-
-        // Vérifier si le post existe
-        $post = Post::find($postId);
-        if (!$post) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Post not found',
-            ], 404);
-        }
-
-        // Vérifier si le post est sauvegardé
-        if (!$user->hasSavedPost($postId)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Post is not saved',
-            ], 404);
-        }
-
-        // Retirer le post des sauvegardés
-        $user->savedPosts()->detach($postId);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Post unsaved successfully',
-        ]);
-    }
-
-    /**
-     * Basculer l'état de sauvegarde d'un post (sauvegarder ou désauvegarder)
-     * Route: POST /api/posts/{postId}/toggle-save
-     */
-
-    /**
-     * Rechercher des utilisateurs par nom avec pagination
-     * Route: GET /api/search/users
-     */
-    public function searchUsers(Request $request)
-    {
-        $query = $request->get('q', '');
-        $page = $request->get('page', 1);
-        $perPage = $request->get('per_page', 10);
-
-        // Valider les paramètres
-        if (empty($query)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Search query is required'
-            ], 400);
-        }
-
-        if ($perPage > 50) {
-            $perPage = 50; // Limiter à 50 résultats par page maximum
-        }
-
-        // Recherche dans les utilisateurs par first_name, last_name ou email
-        $users = \App\Models\User::where(function($q) use ($query) {
-                $q->where('first_name', 'LIKE', "%{$query}%")
-                  ->orWhere('last_name', 'LIKE', "%{$query}%")
-                  ->orWhere('email', 'LIKE', "%{$query}%");
-            })
-            ->select('id', 'first_name', 'last_name', 'email', 'profile_image', 'bio', 'created_at')
-            ->orderBy('first_name', 'asc')
-            ->paginate($perPage, ['*'], 'page', $page);
-
-        // Formater les données pour inclure le nom complet
-        $formattedUsers = $users->getCollection()->map(function ($user) {
-            return [
-                'id' => $user->id,
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
-                'full_name' => $user->first_name . ' ' . $user->last_name,
-                'email' => $user->email,
-                'profile_image' => $user->profile_image,
-                'bio' => $user->bio,
-                'created_at' => $user->created_at
-            ];
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'search_query' => $query,
-                'users' => $formattedUsers,
-                'pagination' => [
-                    'current_page' => $users->currentPage(),
-                    'total_pages' => $users->lastPage(),
-                    'total_items' => $users->total(),
-                    'per_page' => $users->perPage(),
-                    'has_more' => $users->hasMorePages(),
-                    'from' => $users->firstItem(),
-                    'to' => $users->lastItem()
-                ]
-            ]
-        ], 200);
-    }
-
-    /**
-     * Rechercher des posts par tags, description ou sous-catégorie avec pagination
-     * Route: GET /api/Y/search/posts
-     */
-    public function searchPosts(Request $request)
-    {
-        $query = $request->get('q', '');
-        $page = $request->get('page', 1);
-        $perPage = $request->get('per_page', 10);
-
-        // Valider les paramètres
-        if (empty($query)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Search query is required'
-            ], 400);
-        }
-
-        if ($perPage > 50) {
-            $perPage = 50; // Limiter à 50 résultats par page maximum
-        }
-
-        // Recherche dans les posts par description, tags ou sous-catégorie
-        $posts = \App\Models\Post::where(function($q) use ($query) {
-                // Recherche dans la description du post
-                $q->where('description', 'LIKE', "%{$query}%")
-                  // Recherche dans les tags associés au post
-                  ->orWhereHas('tags', function($tagQuery) use ($query) {
-                      $tagQuery->where('tag_name', 'LIKE', "%{$query}%");
-                  })
-                  // Recherche dans la sous-catégorie du post
-                  ->orWhereHas('subcategory', function($subQuery) use ($query) {
-                      $subQuery->where('name', 'LIKE', "%{$query}%");
-                  });
-            })
-            ->where('content_status', 'published') // Seulement les posts publiés
-            ->with(['user:id,first_name,last_name,email,profile_image', 'medias', 'tags', 'subcategory:id,name'])
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage, ['*'], 'page', $page);
-
-        // Formater les données des posts
-        $formattedPosts = $posts->getCollection()->map(function ($post) {
-            return [
-                'id' => $post->id,
-                'description' => $post->description,
-                'content_status' => $post->content_status,
-                'schedule_at' => $post->schedule_at,
-                'created_at' => $post->created_at,
-                'user' => $post->user ? [
-                    'id' => $post->user->id,
-                    'first_name' => $post->user->first_name,
-                    'last_name' => $post->user->last_name,
-                    'full_name' => $post->user->first_name . ' ' . $post->user->last_name,
-                    'email' => $post->user->email,
-                    'profile_image' => $post->user->profile_image
-                ] : null,
-                'media' => $post->medias ? $post->medias->pluck('file_path')->toArray() : [],
-                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
-                'subcategory' => $post->subcategory ? [
-                    'id' => $post->subcategory->id,
-                    'name' => $post->subcategory->name
-                ] : null,
-                'likes_count' => $post->favorites ? $post->favorites()->count() : 0,
-                'comments_count' => $post->comments ? $post->comments()->count() : 0
-            ];
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'search_query' => $query,
-                'posts' => $formattedPosts,
-                'pagination' => [
-                    'current_page' => $posts->currentPage(),
-                    'total_pages' => $posts->lastPage(),
-                    'total_items' => $posts->total(),
-                    'per_page' => $posts->perPage(),
-                    'has_more' => $posts->hasMorePages(),
-                    'from' => $posts->firstItem(),
-                    'to' => $posts->lastItem()
-                ]
-            ]
-        ], 200);
-    }
-
-    /**
-     * Rechercher des fandoms avec pagination
-     * Route: GET /api/Y/search/fandom
-     */
-    public function searchFandomsPaginated(Request $request)
-    {
-        $query = $request->get('q', '');
-        $page = $request->get('page', 1);
-        $perPage = $request->get('per_page', 10);
-
-        // Valider les paramètres
-        if (empty($query)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Search query is required'
-            ], 400);
-        }
-
-        if ($perPage > 50) {
-            $perPage = 50; // Limiter à 50 résultats par page maximum
-        }
-
-        $user = Auth::user();
-
-        // Recherche dans les fandoms par nom, description
-        $fandoms = \App\Models\Fandom::where(function($q) use ($query) {
-                $q->where('name', 'LIKE', "%{$query}%")
-                  ->orWhere('description', 'LIKE', "%{$query}%");
-            })
-            ->with(['subcategory:id,name'])
-            ->withCount(['posts', 'members'])
-            ->orderBy('name', 'asc')
-            ->paginate($perPage, ['*'], 'page', $page);
-
-        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
-        $userMemberships = [];
-        if ($user) {
-            $fandomIds = $fandoms->pluck('id')->toArray();
-            $memberships = \App\Models\Member::where('user_id', $user->id)
-                ->whereIn('fandom_id', $fandomIds)
-                ->get();
-            foreach ($memberships as $membership) {
-                $userMemberships[$membership->fandom_id] = $membership->role;
-            }
-        }
-
-        // Formater les données des fandoms
-        $formattedFandoms = $fandoms->getCollection()->map(function ($fandom) use ($userMemberships) {
-            return [
-                'id' => $fandom->id,
-                'name' => $fandom->name,
-                'description' => $fandom->description,
-                'cover_image' => $fandom->cover_image,
-                'logo_image' => $fandom->logo_image,
-                'subcategory_id' => $fandom->subcategory_id,
-                'subcategory' => $fandom->subcategory ? [
-                    'id' => $fandom->subcategory->id,
-                    'name' => $fandom->subcategory->name
-                ] : null,
-                'posts_count' => $fandom->posts_count ?? 0,
-                'members_count' => $fandom->members_count ?? 0,
-                'is_member' => isset($userMemberships[$fandom->id]),
-                'member_role' => $userMemberships[$fandom->id] ?? null,
-                'created_at' => $fandom->created_at
-            ];
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'search_query' => $query,
-                'fandoms' => $formattedFandoms,
-                'pagination' => [
-                    'current_page' => $fandoms->currentPage(),
-                    'total_pages' => $fandoms->lastPage(),
-                    'total_items' => $fandoms->total(),
-                    'per_page' => $fandoms->perPage(),
-                    'has_more' => $fandoms->hasMorePages(),
-                    'from' => $fandoms->firstItem(),
-                    'to' => $fandoms->lastItem()
-                ]
-            ]
-        ], 200);
-    }
-
 }

@@ -615,4 +615,188 @@ class M_Controller extends Controller
             'path' => $path
         ]);
     }
+
+    /**
+     * n. Get fandoms (id, name, category, subcategory, description, image, date, moderator, optional num_members, num_posts)
+     * Route: GET /api/fandoms
+     */
+    public function getFandoms()
+    {
+        $fandoms = \App\Models\Fandom::with(['subcategory.category', 'members.user', 'posts'])
+            ->get()
+            ->map(function($f) {
+                $category = $f->subcategory && $f->subcategory->category ? $f->subcategory->category->name : null;
+                $subcategory = $f->subcategory ? $f->subcategory->name : null;
+
+                // Find a moderator or admin if exists
+                $modMember = $f->members->first(function($m) {
+                    return in_array($m->role, ['moderator', 'admin']);
+                });
+                $moderator = null;
+                if ($modMember) {
+                    if ($modMember->user) {
+                        $moderator = [
+                            'id' => $modMember->user->id,
+                            'name' => trim(($modMember->user->first_name ?? '') . ' ' . ($modMember->user->last_name ?? '')),
+                        ];
+                    } else {
+                        $moderator = ['user_id' => $modMember->user_id];
+                    }
+                }
+
+                // Images - prefer cover_image then logo_image
+                $imageUrl = null;
+                if (!empty($f->cover_image)) $imageUrl = asset('storage/'.$f->cover_image);
+                elseif (!empty($f->logo_image)) $imageUrl = asset('storage/'.$f->logo_image);
+
+                return [
+                    'id' => $f->id,
+                    'name' => $f->name,
+                    'category' => $category,
+                    'subcategory' => $subcategory,
+                    'description' => $f->description,
+                    'image' => $imageUrl,
+                    'date' => $f->created_at,
+                    'moderator' => $moderator,
+                    'num_members' => $f->members ? $f->members->count() : 0,
+                    'num_posts' => $f->posts ? $f->posts->count() : 0,
+                ];
+            });
+
+        return response()->json(['success' => true, 'data' => $fandoms]);
+    }
+
+    /**
+     * o. Get fandom (by id or name)
+     * Route: GET /api/fandoms/{value}
+     */
+    public function getFandom($value)
+    {
+        $f = \App\Models\Fandom::with(['subcategory.category', 'members.user', 'posts'])
+            ->where('id', $value)
+            ->orWhere('name', $value)
+            ->first();
+
+        if (!$f) return response()->json(['success' => false, 'error' => 'Fandom not found'], 404);
+
+        $category = $f->subcategory && $f->subcategory->category ? $f->subcategory->category->name : null;
+        $subcategory = $f->subcategory ? $f->subcategory->name : null;
+
+        $modMember = $f->members->first(function($m) {
+            return in_array($m->role, ['moderator', 'admin']);
+        });
+        $moderator = null;
+        if ($modMember) {
+            if ($modMember->user) {
+                $moderator = [
+                    'id' => $modMember->user->id,
+                    'name' => trim(($modMember->user->first_name ?? '') . ' ' . ($modMember->user->last_name ?? '')),
+                ];
+            } else {
+                $moderator = ['user_id' => $modMember->user_id];
+            }
+        }
+
+        $imageUrl = null;
+        if (!empty($f->cover_image)) $imageUrl = asset('storage/'.$f->cover_image);
+        elseif (!empty($f->logo_image)) $imageUrl = asset('storage/'.$f->logo_image);
+
+        $result = [
+            'id' => $f->id,
+            'name' => $f->name,
+            'category' => $category,
+            'subcategory' => $subcategory,
+            'description' => $f->description,
+            'image' => $imageUrl,
+            'date' => $f->created_at,
+            'moderator' => $moderator,
+            'num_members' => $f->members ? $f->members->count() : 0,
+            'num_posts' => $f->posts ? $f->posts->count() : 0,
+        ];
+
+        return response()->json(['success' => true, 'data' => $result]);
+    }
+
+    /**
+     * p. Add fandom (multipart/form-data, image file, moderator user_id optional)
+     * Route: POST /api/fandoms
+     */
+    public function addFandom(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|unique:fandoms,name',
+            'description' => 'nullable|string',
+            'subcategory_id' => 'nullable|integer|exists:subcategories,id',
+            'moderator_user_id' => 'nullable|integer|exists:users,id',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'cover' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
+
+        $coverPath = null;
+        $logoPath = null;
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $coverPath = $file->store('fandoms/covers', 'public');
+        }
+        if ($request->hasFile('cover')) {
+            $file = $request->file('cover');
+            $coverPath = $file->store('fandoms/covers', 'public');
+        }
+        if ($request->hasFile('logo')) {
+            $file = $request->file('logo');
+            $logoPath = $file->store('fandoms/logos', 'public');
+        }
+
+        $fandom = \App\Models\Fandom::create([
+            'name' => $request->name,
+            'description' => $request->description ?? null,
+            'subcategory_id' => $request->subcategory_id ?? null,
+            'cover_image' => $coverPath,
+            'logo_image' => $logoPath,
+        ]);
+
+        $moderator = null;
+        if ($request->moderator_user_id) {
+            $member = \App\Models\Member::create([
+                'user_id' => $request->moderator_user_id,
+                'fandom_id' => $fandom->id,
+                'role' => 'moderator',
+            ]);
+            $moderator = [
+                'user_id' => $member->user_id,
+            ];
+        }
+
+        $category = $fandom->subcategory && $fandom->subcategory->category ? $fandom->subcategory->category->name : null;
+        $subcategory = $fandom->subcategory ? $fandom->subcategory->name : null;
+        $imageUrl = null;
+        if ($fandom->cover_image) $imageUrl = asset('storage/'.$fandom->cover_image);
+        elseif ($fandom->logo_image) $imageUrl = asset('storage/'.$fandom->logo_image);
+
+        $result = [
+            'id' => $fandom->id,
+            'name' => $fandom->name,
+            'description' => $fandom->description,
+            'category' => $category,
+            'subcategory' => $subcategory,
+            'image' => $imageUrl,
+            'date' => $fandom->created_at,
+            'moderator' => $moderator,
+        ];
+
+        return response()->json(['success' => true, 'data' => $result], 201);
+    }
+
+    /**
+     * q. Delete fandom (id)
+     * Route: DELETE /api/fandoms/{id}
+     */
+    public function deleteFandom($id)
+    {
+        $f = \App\Models\Fandom::find($id);
+        if (!$f) return response()->json(['success' => false, 'error' => 'Fandom not found'], 404);
+        $f->delete();
+        return response()->json(['success' => true, 'message' => 'Fandom deleted']);
+    }
 }

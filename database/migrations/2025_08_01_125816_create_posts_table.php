@@ -11,17 +11,23 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('posts', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->integer('feedback')->default(0);
-            $table->timestamp('schedule_at')->nullable();
-            $table->text('description')->nullable();
-            $table->enum('content_status', ['draft', 'published', 'archived'])->default('draft');
-            $table->unsignedBigInteger('subcategory_id')->nullable();
-            $table->foreign('subcategory_id')->references('id')->on('subcategories')->onDelete('set null');
-            $table->timestamps();
-        });
+        // Skip creation if table already exists to avoid "table already exists" errors
+        if (!Schema::hasTable('posts')) {
+            Schema::create('posts', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('user_id')->constrained()->onDelete('cascade');
+                $table->integer('feedback')->default(0);
+                $table->timestamp('schedule_at')->nullable();
+                $table->text('description')->nullable();
+                $table->enum('content_status', ['draft', 'published', 'archived'])->default('draft');
+                $table->unsignedBigInteger('subcategory_id')->nullable();
+                // Add foreign key only if subcategories table exists to avoid FK formation errors
+                if (Schema::hasTable('subcategories')) {
+                    $table->foreign('subcategory_id')->references('id')->on('subcategories')->onDelete('set null');
+                }
+                $table->timestamps();
+            });
+        }
     }
 
     /**

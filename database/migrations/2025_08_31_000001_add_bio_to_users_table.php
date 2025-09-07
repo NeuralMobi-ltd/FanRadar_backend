@@ -9,9 +9,15 @@ return new class extends Migration
     public function up()
     {
         if (!Schema::hasColumn('users', 'bio')) {
-            Schema::table('users', function (Blueprint $table) {
-                $table->text('bio')->nullable()->after('gender');
-            });
+            if (Schema::hasColumn('users', 'gender')) {
+                Schema::table('users', function (Blueprint $table) {
+                    $table->text('bio')->nullable()->after('gender');
+                });
+            } else {
+                Schema::table('users', function (Blueprint $table) {
+                    $table->text('bio')->nullable();
+                });
+            }
         }
     }
 

@@ -17,6 +17,19 @@ class Fandom extends Model
         'logo_image',
     ];
 
+    // Expose noms calculés sans stocker category_id dans la table
+    protected $appends = ['subcategory_name', 'category_name'];
+
+    public function getSubcategoryNameAttribute()
+    {
+        return $this->subcategory ? $this->subcategory->name : null;
+    }
+
+    public function getCategoryNameAttribute()
+    {
+        return $this->subcategory && $this->subcategory->category ? $this->subcategory->category->name : null;
+    }
+
     public function subcategory()
     {
         return $this->belongsTo(SubCategory::class);
@@ -31,5 +44,11 @@ class Fandom extends Model
     public function members()
     {
         return $this->hasMany(Member::class);
+    }
+
+    public function category()
+    {
+        // On récupère la catégorie via la sous-catégorie
+        return $this->subcategory ? $this->subcategory->category : null;
     }
 }

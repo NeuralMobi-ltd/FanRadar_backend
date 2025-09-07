@@ -304,4 +304,11 @@ Route::put('/products-simple/{id}', [\App\Http\Controllers\Api\M_Controller::cla
 Route::delete('/products-simple/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteProductSimple']);
 
 
+// Fandoms - personalize controller
+Route::get('fandoms', [PersonnaliseController::class, 'getFandoms']);
+Route::get('fandoms/{id}', [PersonnaliseController::class, 'showFandom']);
+Route::post('fandoms', [PersonnaliseController::class, 'createFandom']);
+Route::delete('fandoms/{id}', [PersonnaliseController::class, 'deleteFandom']);
+
+
 
