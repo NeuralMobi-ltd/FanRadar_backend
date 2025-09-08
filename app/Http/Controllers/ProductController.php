@@ -4,13 +4,41 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ProductController extends Controller
 {
     // ✅ GET /api/products — Liste paginée des produits avec leurs médias
     public function index()
     {
-        $products = Product::with(['medias', 'subcategory'])->paginate(10);
+        $products = Product::with(['medias', 'subcategory'])
+            ->withCount(['ratings' => function($query) {
+                $query->where('rateable_type', Product::class);
+            }])
+            ->withAvg(['ratings' => function($query) {
+                $query->where('rateable_type', Product::class);
+            }], 'evaluation')
+            ->paginate(10);
+
+        // Formater les données pour inclure les informations de rating
+        $products->getCollection()->transform(function ($product) {
+            $product->ratings_count = $product->ratings_count ?? 0;
+            $product->ratings_average = $product->ratings_avg_evaluation ? round($product->ratings_avg_evaluation, 1) : 0;
+
+            // Ajouter isWishlisted seulement si l'utilisateur est connecté
+            $user = Auth::user();
+            if ($user) {
+                $product->isWishlisted = $product->favorites()
+                    ->where('user_id', $user->id)
+                    ->exists();
+            }
+
+            // Supprimer le champ technique Laravel
+            unset($product->ratings_avg_evaluation);
+
+            return $product;
+        });
+
         return response()->json($products);
     }
 
@@ -68,7 +96,58 @@ class ProductController extends Controller
     // ✅ GET /api/products/{product} — Afficher un seul produit
     public function show(Product $product)
     {
-        return response()->json($product->load(['medias', 'subcategory']));
+        // Charger le produit avec toutes ses relations
+        $product->load([
+            'medias',
+            'subcategory',
+            'ratings' => function($query) {
+                $query->with('user:id,first_name,last_name,email,profile_image')
+                      ->orderBy('created_at', 'desc');
+            }
+        ]);
+
+        // Calculer les statistiques de rating
+        $ratingsCount = $product->ratings->count();
+        $ratingsAverage = $ratingsCount > 0 ? round($product->ratings->avg('evaluation'), 1) : 0;
+
+        // Formater les ratings pour la réponse
+        $formattedRatings = $product->ratings->map(function ($rating) {
+            return [
+                'id' => $rating->id,
+                'evaluation' => $rating->evaluation,
+                'commentaire' => $rating->commentaire,
+                'created_at' => $rating->created_at ? $rating->created_at->toISOString() : null,
+                'user' => $rating->user ? [
+                    'id' => $rating->user->id,
+                    'first_name' => $rating->user->first_name,
+                    'last_name' => $rating->user->last_name,
+                    'full_name' => trim($rating->user->first_name . ' ' . $rating->user->last_name),
+                    'email' => $rating->user->email,
+                    'profile_image' => $rating->user->profile_image,
+                ] : null,
+            ];
+        });
+
+        // Préparer la réponse avec les statistiques de rating
+        $productData = $product->toArray();
+        $productData['ratings_count'] = $ratingsCount;
+        $productData['ratings_average'] = $ratingsAverage;
+
+        // Ajouter isWishlisted seulement si l'utilisateur est connecté
+        $user = Auth::user();
+        if ($user) {
+            $productData['isWishlisted'] = $product->favorites()
+                ->where('user_id', $user->id)
+                ->exists();
+        }
+
+        $productData['ratings'] = $formattedRatings;
+
+        // Supprimer les relations non formatées
+        unset($productData['ratings']);
+        $productData['ratings'] = $formattedRatings;
+
+        return response()->json($productData);
     }
 
     // ✅ PUT/PATCH /api/products/{product} — Modifier un produit (pas les médias ici)

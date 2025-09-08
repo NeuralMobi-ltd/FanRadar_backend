@@ -42,12 +42,7 @@ Route::post('/posts', [PostController::class, 'store']);
 Route::put('/posts/{post}', [PostController::class, 'update']);
 Route::delete('/posts/{post}', [PostController::class, 'destroy']);
 
-// 🛒 COMMANDES - Routes publiques (pour test uniquement)
-Route::get('/orders', [OrderController::class, 'index']);
-Route::get('/orders/{order}', [OrderController::class, 'show']);
-Route::post('/orders', [OrderController::class, 'store']);
-Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
-Route::put('/orders/{order}', [OrderController::class, 'update']);
+
 
 
 Route::post('/tags/attach', [TagController::class, 'attachTag']);// donner et cree un tage pour un post ou product
@@ -121,7 +116,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('Y/users/{userId}/follow', [PersonnaliseController::class, 'followUser']);
     Route::delete('Y/users/{userId}/unfollow', [PersonnaliseController::class, 'unfollowUser']);
 
-    Route::post('Y/posts/{postId}/favorite', [PersonnaliseController::class, 'addfavoritePost']);
+
 
     Route::post('Y/posts/{postId}/comments', [PersonnaliseController::class, 'addCommentToPost']);
 
@@ -162,7 +157,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('Y/feed/following', [PersonnaliseController::class, 'getFollowingFeed']);
 
 
-});
 
 
 Route::get('Y/users/{userId}/followers', [PersonnaliseController::class, 'getUserFollowers']);
@@ -212,11 +206,30 @@ Route::get('Y/categories/{category_id}/posts', [PersonnaliseController::class, '
 Route::get('Y/categories/{category_id}/fandoms', [PersonnaliseController::class, 'getCategoryFandoms']);
 
 
-Route::get('Y/products', [ProductController::class, 'index']);
-Route::get('Y/products/{product}', [ProductController::class, 'show']);
-Route::post('Y/products', [ProductController::class, 'store']);
-Route::put('Y/products/{product}', [ProductController::class, 'update']);
-Route::delete('Y/products/{product}', [ProductController::class, 'destroy']);
+Route::post('Y/posts/{postId}/favorite', [PersonnaliseController::class, 'addfavoritePost']);
+Route::delete('Y/posts/{postId}/removefavorite', [PersonnaliseController::class, 'removefavoritePost']);
+Route::post('Y/favorites/{pProductId}/favorite', [PersonnaliseController::class, 'addFavoriteProduct']);
+Route::delete('Y/favorites/{pProductId}/removefavorite', [PersonnaliseController::class, 'removeFavoriteProduct']);
+
+// Routes pour afficher les favoris
+Route::get('Y/favorites/posts', [PersonnaliseController::class, 'getFavoritePosts']);
+Route::get('Y/favorites/products', [PersonnaliseController::class, 'getFavoriteProducts']);
+
+Route::get('products', [ProductController::class, 'index']);
+Route::get('products/{product}', [ProductController::class, 'show']);
+
+
+
+Route::post('products', [ProductController::class, 'store']);
+Route::put('products/{product}', [ProductController::class, 'update']);
+Route::delete('products/{product}', [ProductController::class, 'destroy']);
+
+// 🛒 COMMANDES
+Route::get('/orders', [OrderController::class, 'index']);
+Route::get('/orders/{order}', [OrderController::class, 'show']);
+Route::post('/orders', [OrderController::class, 'store']);
+Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
+Route::put('/orders/{order}', [OrderController::class, 'update']);
 
 // ====================
 // admin api
@@ -227,6 +240,7 @@ Route::get('admin/user/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'g
 Route::post('admin/users', [\App\Http\Controllers\Api\M_Controller::class, 'addUser']);
 Route::put('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateUser']);
 Route::delete('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteUser']);
+});
 
 
 // ====================

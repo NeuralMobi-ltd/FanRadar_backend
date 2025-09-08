@@ -760,6 +760,110 @@ class PersonnaliseController extends Controller
      }
 
 
+    public function addFavoriteProduct($pProductId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        // Vérifier que le produit existe
+        $product = Product::find($pProductId);
+        if (!$product) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product not found'
+            ], 404);
+        }
+
+        // Vérifier si déjà en favori
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $product->id,
+            'favoriteable_type' => 'App\\Models\\Product',
+        ])->first();
+
+        if ($existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce produit est déjà dans vos favoris.'
+            ], 409);
+        }
+
+        // Créer le favori
+        Favorite::create([
+            'user_id' => $user->id,
+            'favoriteable_id' => $product->id,
+            'favoriteable_type' => 'App\\Models\\Product',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le produit a été ajouté aux favoris avec succès.'
+        ], 201);
+    }
+
+    public function addFavorite($type, $itemId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        // Valider le type
+        if (!in_array($type, ['post', 'product'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Type invalide. Utilisez "post" ou "product".'
+            ], 400);
+        }
+
+        // Déterminer le modèle à utiliser
+        $modelClass = $type === 'post' ? Post::class : Product::class;
+        $modelName = $type === 'post' ? 'Post' : 'Product';
+
+        // Vérifier que l'élément existe
+        $item = $modelClass::find($itemId);
+        if (!$item) {
+            return response()->json([
+                'success' => false,
+                'message' => $modelName . ' not found'
+            ], 404);
+        }
+
+        // Vérifier si déjà en favori
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $item->id,
+            'favoriteable_type' => $modelClass,
+        ])->first();
+
+        if ($existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cet élément est déjà dans vos favoris.'
+            ], 409);
+        }
+
+        // Créer le favori
+        Favorite::create([
+            'user_id' => $user->id,
+            'favoriteable_id' => $item->id,
+            'favoriteable_type' => $modelClass,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'L\'élément a été ajouté aux favoris avec succès.'
+        ], 201);
+    }
+
     public function addfavoritePost($postId)
     {
         $user = Auth::user();
@@ -803,6 +907,89 @@ class PersonnaliseController extends Controller
             'success' => true,
             'message' => 'Le post a été ajouté aux favoris avec succès.'
         ], 201);
+    }
+
+    public function removefavoritePost($postId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found'
+            ], 404);
+        }
+
+        // Vérifier si le favori existe
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $post->id,
+            'favoriteable_type' => 'App\\Models\\Post',
+        ])->first();
+
+        if (!$existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce post n\'est pas dans vos favoris.'
+            ], 404);
+        }
+
+        // Supprimer le favori
+        $existingFavorite->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le post a été retiré des favoris avec succès.'
+        ], 200);
+    }
+
+    public function removeFavoriteProduct($pProductId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        // Vérifier que le produit existe
+        $product = Product::find($pProductId);
+        if (!$product) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product not found'
+            ], 404);
+        }
+
+        // Vérifier si le favori existe
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $product->id,
+            'favoriteable_type' => 'App\\Models\\Product',
+        ])->first();
+
+        if (!$existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce produit n\'est pas dans vos favoris.'
+            ], 404);
+        }
+
+        // Supprimer le favori
+        $existingFavorite->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le produit a été retiré des favoris avec succès.'
+        ], 200);
     }
 
     /**
@@ -3540,5 +3727,144 @@ class PersonnaliseController extends Controller
             ]
         ]);
     }
+
+    /**
+     * Récupérer tous les posts favoris de l'utilisateur authentifié
+     * Route: GET /api/Y/favorites/posts
+     */
+    public function getFavoritePosts(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(100, max(1, (int) $request->get('limit', 10)));
+
+        // Récupérer les favoris de type Post avec pagination
+        $favorites = Favorite::where('user_id', $user->id)
+            ->where('favoriteable_type', 'App\\Models\\Post')
+            ->with(['favoriteable.user', 'favoriteable.medias', 'favoriteable.tags'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts favoris
+        $formattedPosts = collect($favorites->items())->map(function ($favorite) {
+            $post = $favorite->favoriteable;
+            if (!$post) return null; // Post supprimé
+
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'category_id' => $post->category_id ?? null,
+                'subcategory_id' => $post->subcategory_id ?? null,
+                'fandom_id' => $post->fandom_id ?? null,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'favorited_at' => $favorite->created_at ? $favorite->created_at->toISOString() : null,
+                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                'user' => $post->user ? [
+                    'id' => $post->user->id,
+                    'first_name' => $post->user->first_name,
+                    'last_name' => $post->user->last_name,
+                    'profile_image' => $post->user->profile_image,
+                ] : null,
+                'likes_count' => method_exists($post, 'favorites') ? $post->favorites()->count() : 0,
+                'comments_count' => method_exists($post, 'comments') ? $post->comments()->count() : 0,
+            ];
+        })->filter(); // Supprimer les posts null
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts->values(),
+                'pagination' => [
+                    'current_page' => $favorites->currentPage(),
+                    'total_pages' => $favorites->lastPage(),
+                    'total_items' => $favorites->total(),
+                    'per_page' => $favorites->perPage(),
+                    'has_more' => $favorites->hasMorePages(),
+                    'from' => $favorites->firstItem(),
+                    'to' => $favorites->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer tous les produits favoris de l'utilisateur authentifié
+     * Route: GET /api/Y/favorites/products
+     */
+    public function getFavoriteProducts(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(100, max(1, (int) $request->get('limit', 10)));
+
+        // Récupérer les favoris de type Product avec pagination
+        $favorites = Favorite::where('user_id', $user->id)
+            ->where('favoriteable_type', 'App\\Models\\Product')
+            ->with(['favoriteable'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les produits favoris
+        $formattedProducts = collect($favorites->items())->map(function ($favorite) {
+            $product = $favorite->favoriteable;
+            if (!$product) return null; // Produit supprimé
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'description' => $product->description,
+                'price' => $product->price,
+                'image' => $product->image,
+                'category_id' => $product->category_id ?? null,
+                'subcategory_id' => $product->subcategory_id ?? null,
+                'stock_quantity' => $product->stock_quantity ?? 0,
+                'created_at' => $product->created_at ? $product->created_at->toISOString() : null,
+                'updated_at' => $product->updated_at ? $product->updated_at->toISOString() : null,
+                'favorited_at' => $favorite->created_at ? $favorite->created_at->toISOString() : null,
+                'rating_average' => method_exists($product, 'ratings') ? round($product->ratings()->avg('evaluation') ?? 0, 2) : 0,
+                'rating_count' => method_exists($product, 'ratings') ? $product->ratings()->count() : 0,
+            ];
+        })->filter(); // Supprimer les produits null
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'products' => $formattedProducts->values(),
+                'pagination' => [
+                    'current_page' => $favorites->currentPage(),
+                    'total_pages' => $favorites->lastPage(),
+                    'total_items' => $favorites->total(),
+                    'per_page' => $favorites->perPage(),
+                    'has_more' => $favorites->hasMorePages(),
+                    'from' => $favorites->firstItem(),
+                    'to' => $favorites->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer tous les favoris de l'utilisateur authentifié (posts et produits)
+     * Route: GET /api/Y/favorites
+     */
+
 
 }
