@@ -20,13 +20,11 @@ class PostController extends Controller
    public function store(Request $request)
 {
     $validated = $request->validate([
-        'title' => 'required|string|max:255',
-        'body' => 'nullable|string',
-        'user_id' => 'required|exists:users,id',
-        'feedback' => 'integer',
         'schedule_at' => 'nullable|date',
         'description' => 'nullable|string',
+        'subcategory_id' => 'nullable|integer|exists:subcategories,id',
         'content_status' => 'required|in:draft,published,archived',
+        'user_id' => 'required|exists:users,id',
         'medias' => 'nullable|array',
         'medias.*' => 'file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
     ]);
@@ -80,11 +78,9 @@ class PostController extends Controller
     public function update(Request $request, Post $post)
     {
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'body' => 'nullable|string',
-            'feedback' => 'integer',
             'schedule_at' => 'nullable|date',
             'description' => 'nullable|string',
+            'subcategory_id' => 'nullable|integer|exists:subcategories,id',
             'content_status' => 'required|in:draft,published,archived',
         ]);
 
