@@ -1,16 +1,22 @@
 <?php
 namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
+use App\Mail\OTPMail;
 use App\Models\User;
 use App\Models\Post;
 use App\Models\Category;
 use App\Models\Favorite;
 use App\Models\Product;
+use BcMath\Number;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Mail;
+
+use function Laravel\Prompts\password;
 
 class PersonnaliseController extends Controller
 {
@@ -178,6 +184,89 @@ class PersonnaliseController extends Controller
         ], 201);
     }
 
+
+        public function forgetPassword(Request $request)
+    {
+
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json(['error' => 'Email not found'], 404);
+        }
+
+        $otp = rand(100000, 999999);
+
+        $user->update([
+            'otp' => $otp,
+            'otp_created_at' => now()
+        ]);
+        $subject = 'OTP for Password Reset';
+
+        Mail::to($user->email)->send(new OTPMail($otp));
+
+        return response()->json(['message' => 'OTP sent to your email'], 200);
+    }
+
+    public function verifyOTP(Request $request)
+{
+    $request->validate([
+        'email' => 'required|email|exists:users,email',
+        'otp' => 'required|numeric',
+    ]);
+
+    $user = User::where('email', $request->email)
+                ->where('otp', $request->otp)
+                ->first();
+
+    if (!$user) {
+        return response()->json(['error' => 'OTP invalide'], 400);
+    }
+
+    // Vérifier l'expiration (10 minutes)
+    if (Carbon::now()->diffInMinutes($user->otp_created_at) > 10) {
+        return response()->json(['error' => 'OTP expiré'], 400);
+    }
+
+    return response()->json(['message' => 'OTP validé'], 200);
+}
+
+    public function resetPassword(Request $request){
+        $request->validate([
+                'email' => 'required|email',
+                'otp' => 'required|numeric',
+                'password' => 'required|string|min:6|confirmed',
+                'password_confirmation' => 'required|string|min:6'
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json(['error' => 'Email invalide'], 404);
+        }
+
+        if($user->otp!=$request->otp){
+             return response()->json(['error' => 'OTP invalide'], 404);
+        }
+
+        $otpCreatedAt = $user->otp_created_at;
+        if (\Carbon\Carbon::now()->diffInMinutes($otpCreatedAt) > 10) {
+            return response()->json(['error' => 'OTP expiré'], 400);
+        }
+
+        // Réinitialiser le mot de passe
+        $user->update([
+            'password' => bcrypt($request->password),
+            'otp' => null,
+            'otp_created_at' => null
+        ]);
+
+        return response()->json(['message' => 'Mot de passe réinitialisé avec succès'], 200);
+
+
+
+    }
     // ====================
     // USER PROFILE
     // ====================

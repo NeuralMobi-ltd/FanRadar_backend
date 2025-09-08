@@ -95,6 +95,11 @@ Route::get('/users/{userId}/mutual-followers', [\App\Http\Controllers\FollowCont
 // ====================
 Route::post('Y/auth/login', [PersonnaliseController::class, 'login']);
 Route::post('/Y/auth/register', [PersonnaliseController::class, 'register']);
+//otp
+Route::post('/forgetPassword', [PersonnaliseController::class, 'forgetPassword']);
+Route::post('/resetPassword', [PersonnaliseController::class, 'resetPassword']);
+Route::post('/verifyOTP', [PersonnaliseController::class, 'verifyOTP']);
+
 
 // ====================
 // USER PROFILE
@@ -212,8 +217,8 @@ Route::post('Y/favorites/{pProductId}/favorite', [PersonnaliseController::class,
 Route::delete('Y/favorites/{pProductId}/removefavorite', [PersonnaliseController::class, 'removeFavoriteProduct']);
 
 // Routes pour afficher les favoris
-Route::get('Y/favorites/posts', [PersonnaliseController::class, 'getFavoritePosts']);
-Route::get('Y/favorites/products', [PersonnaliseController::class, 'getFavoriteProducts']);
+Route::get('Y/myfavorites/posts', [PersonnaliseController::class, 'getFavoritePosts']);
+Route::get('Y/myfavorites/products', [PersonnaliseController::class, 'getFavoriteProducts']);
 
 Route::get('products', [ProductController::class, 'index']);
 Route::get('products/{product}', [ProductController::class, 'show']);
@@ -229,6 +234,7 @@ Route::get('/orders', [OrderController::class, 'index']);
 Route::get('/orders/my-orders', [OrderController::class, 'getMyOrders']);
 Route::get('/orders/{order}', [OrderController::class, 'show']);
 Route::post('/orders', [OrderController::class, 'store']);
+
 Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
 Route::put('/orders/{order}', [OrderController::class, 'update']);
 
