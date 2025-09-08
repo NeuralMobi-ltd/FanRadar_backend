@@ -598,7 +598,7 @@ class M_Controller extends Controller
             'sale_end_date' => $request->sale_end_date,
             'description' => $request->description,
             'revenue' => $request->revenue,
-            'content_status' => 'active',
+            'content_status' => 'published',
         ]);
         return response()->json(['success' => true, 'data' => $drop], 201);
     }

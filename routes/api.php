@@ -101,6 +101,7 @@ Route::post('/resetPassword', [PersonnaliseController::class, 'resetPassword']);
 Route::post('/verifyOTP', [PersonnaliseController::class, 'verifyOTP']);
 
 
+
 // ====================
 // USER PROFILE
 // ====================

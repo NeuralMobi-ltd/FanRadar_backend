@@ -121,23 +121,26 @@ class PersonnaliseController extends Controller
             'bio' => 'nullable|string|max:2000',
             'preferred_categories' => 'nullable|array',
             'preferred_categories.*' => 'integer|exists:categories,id',
+
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+
         $user = User::create([
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            // store null when no image provided (do not use default.png)
             'profile_image' => $profileImagePath ?? null,
             'background_image' => null,
             'date_naissance' => $request->date_naissance,
             'gender' => $request->gender,
             'bio' => $request->bio ?? null,
+            'otp' => null,
+            'otp_created_at' => null,
         ]);
 
         $user->assignRole('user');
