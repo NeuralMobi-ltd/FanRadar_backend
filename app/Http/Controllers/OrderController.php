@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class OrderController extends Controller
 {
@@ -17,6 +18,23 @@ class OrderController extends Controller
         return response()->json($orders);
     }
 
+    /**
+     * Get orders for the authenticated user.
+     */
+    public function getMyOrders()
+    {
+        $orders = Order::with(['products'])
+            ->where('user_id', Auth::id())
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'orders' => $orders,
+            'total_orders' => $orders->count()
+        ]);
+    }
+
 
 
     /**
@@ -25,8 +43,6 @@ class OrderController extends Controller
     public function store(Request $request)
 {
     $request->validate([
-        'user_id' => 'required|exists:users,id',
-        'total_amount' => 'required|numeric|min:0',
         'status' => 'in:' . implode(',', Order::STATUSES),
         'order_date' => 'required|date',
         'products' => 'required|array',
@@ -34,7 +50,9 @@ class OrderController extends Controller
         'products.*.quantity' => 'required|integer|min:1',
     ]);
 
-    // 1. Vérification du stock de chaque produit
+    $totalAmount = 0;
+
+    // 1. Vérification du stock + calcul du montant total
     foreach ($request->products as $productData) {
         $product = Product::find($productData['product_id']);
         if (!$product) {
@@ -46,12 +64,30 @@ class OrderController extends Controller
                 'error' => "Stock insuffisant pour le produit '{$product->product_name}'. Stock disponible : {$product->stock}, demandé : {$productData['quantity']}."
             ], 422);
         }
+
+        // Calcul du prix avec promotion
+        $price = $product->price;
+
+        // Vérifier si le produit a une promotion active
+        if ($product->promotion && $product->promotion > 0) {
+            $currentDate = now();
+            $isPromotionActive = (!$product->sale_start_date || $currentDate >= $product->sale_start_date) &&
+                               (!$product->sale_end_date || $currentDate <= $product->sale_end_date);
+
+            if ($isPromotionActive) {
+                // Appliquer la promotion (réduction en pourcentage)
+                $price = $product->price * (1 - $product->promotion / 100);
+            }
+        }
+
+        // Ajouter au montant total
+        $totalAmount += $price * $productData['quantity'];
     }
 
-    // 2. Création de la commande
+    // 2. Création de la commande avec le montant calculé
     $order = Order::create([
-        'user_id' => $request->user_id,
-        'total_amount' => $request->total_amount,
+        'user_id' => Auth::id(),
+        'total_amount' => round($totalAmount, 2),
         'status' => $request->status ?? 'pending',
         'order_date' => $request->order_date,
     ]);

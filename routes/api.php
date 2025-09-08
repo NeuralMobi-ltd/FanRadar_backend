@@ -226,6 +226,7 @@ Route::delete('products/{product}', [ProductController::class, 'destroy']);
 
 // 🛒 COMMANDES
 Route::get('/orders', [OrderController::class, 'index']);
+Route::get('/orders/my-orders', [OrderController::class, 'getMyOrders']);
 Route::get('/orders/{order}', [OrderController::class, 'show']);
 Route::post('/orders', [OrderController::class, 'store']);
 Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
