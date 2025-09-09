@@ -427,22 +427,29 @@ class M_Controller extends Controller
         $post = \App\Models\Post::find($id);
         if (!$post) return response()->json(['success' => false, 'error' => 'Post not found'], 404);
 
+<<<<<<< HEAD
         $columns = Schema::getColumnListing('posts');
         $updatable = array_intersect(['title', 'content', 'category_id', 'subcategory_id', 'fandom_id'], $columns);
 
         $updateData = $request->only($updatable);
+=======
+        $updateData = $request->only(['title', 'content', 'category_id', 'subcategory_id']);
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
         if ($request->has('media')) {
             $updateData['media'] = $request->media;
         }
 
         $post->update($updateData);
 
+<<<<<<< HEAD
         // If description exists but title/content columns do not, update description from request
         if (in_array('description', $columns) && ($request->filled('content') || $request->filled('title'))) {
             $post->description = $request->content ?? $request->title ?? $post->description;
             $post->save();
         }
 
+=======
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
         // Mettre à jour les tags si fournis
         if ($request->has('tags') && is_array($request->tags)) {
             $post->tags()->detach(); // Supprimer tous les tags existants
@@ -452,6 +459,7 @@ class M_Controller extends Controller
             }
         }
 
+<<<<<<< HEAD
         // Recharge le post avec relations utiles
         $post = \App\Models\Post::with(['medias','user','category','subcategory','fandom'])->find($post->id);
 
@@ -464,6 +472,9 @@ class M_Controller extends Controller
             'media' => $post->medias->filter(function($m) { return !empty($m->file_path); })->map(function($m) { return asset('storage/' . $m->file_path); })->values()->toArray(),
             'updated_at' => $post->updated_at,
         ]]);
+=======
+        return response()->json(['success' => true, 'data' => $post]);
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
     }
 
     // e. Get posts by tag
@@ -620,6 +631,7 @@ class M_Controller extends Controller
 
         $authorId = $request->input('author_id') ?? $request->input('user_id');
 
+<<<<<<< HEAD
         // Only include columns that exist in DB to avoid QueryException
         $columns = Schema::getColumnListing('posts');
         $data = [];
@@ -631,6 +643,37 @@ class M_Controller extends Controller
         if (in_array('category_id', $columns) && $request->filled('category_id')) $data['category_id'] = $request->category_id;
         if (in_array('subcategory_id', $columns) && $request->filled('subcategory_id')) $data['subcategory_id'] = $request->subcategory_id;
         if (in_array('fandom_id', $columns) && $request->filled('fandom_id')) $data['fandom_id'] = $request->fandom_id;
+=======
+    // add drop
+    // URL: POST /api/drops-simple
+    public function addDropSimple(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string',
+            'type' => 'nullable|string',
+            'price' => 'required|numeric',
+            'stock' => 'required|integer',
+            'promotion' => 'nullable|numeric',
+            'sale_start_date' => 'required|date',
+            'sale_end_date' => 'required|date|after_or_equal:sale_start_date',
+            'description' => 'nullable|string',
+            'revenue' => 'nullable|numeric',
+        ]);
+        $drop = \App\Models\Product::create([
+            'product_name' => $request->name,
+            'type' => $request->type,
+            'price' => $request->price,
+            'stock' => $request->stock,
+            'promotion' => $request->promotion,
+            'sale_start_date' => $request->sale_start_date,
+            'sale_end_date' => $request->sale_end_date,
+            'description' => $request->description,
+            'revenue' => $request->revenue,
+            'content_status' => 'published',
+        ]);
+        return response()->json(['success' => true, 'data' => $drop], 201);
+    }
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 
         $post = \App\Models\Post::create($data);
 

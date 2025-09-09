@@ -30,6 +30,8 @@ class User extends Authenticatable
         'bio',
         'gender',
         'password',
+        'otp',
+        'otp_created_at'
     ];
 
     /**

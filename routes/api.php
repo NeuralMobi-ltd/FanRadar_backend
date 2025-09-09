@@ -68,8 +68,6 @@ Route::get('/users/{userId}/favorites', [\App\Http\Controllers\FavoriteControlle
 Route::get('/users/{userId}/favorites/{type}', [\App\Http\Controllers\FavoriteController::class, 'getUserFavoritesByType']);
 Route::get('/favorites/{type}/{id}/users', [\App\Http\Controllers\FavoriteController::class, 'getItemFavoriteUsers']);
 
-Route::post('/ratings', [\App\Http\Controllers\RatingController::class, 'addOrUpdateRating']);
-Route::delete('/ratings', [\App\Http\Controllers\RatingController::class, 'deleteRating']);
 Route::get('/ratings/{type}/{id}', [\App\Http\Controllers\RatingController::class, 'getItemRatings']);
 Route::get('/ratings/{type}/{id}/statistics', [\App\Http\Controllers\RatingController::class, 'getItemRatingStatistics']);
 Route::get('/users/{userId}/ratings', [\App\Http\Controllers\RatingController::class, 'getUserRatings']);
@@ -95,6 +93,12 @@ Route::get('/users/{userId}/mutual-followers', [\App\Http\Controllers\FollowCont
 // ====================
 Route::post('Y/auth/login', [PersonnaliseController::class, 'login']);
 Route::post('/Y/auth/register', [PersonnaliseController::class, 'register']);
+//otp
+Route::post('/forgetPassword', [PersonnaliseController::class, 'forgetPassword']);
+Route::post('/resetPassword', [PersonnaliseController::class, 'resetPassword']);
+Route::post('/verifyOTP', [PersonnaliseController::class, 'verifyOTP']);
+
+
 
 // ====================
 // USER PROFILE
@@ -166,7 +170,11 @@ Route::get('Y/feed/home', [PersonnaliseController::class, 'getHomeFeed']);
 Route::get('Y/feed/explore', [PersonnaliseController::class, 'getExploreFeed']);
 
 
+<<<<<<< HEAD
 Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']);
+=======
+//Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']);
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 //Route::get('/categories/{category}/content', [PersonnaliseController::class, 'getCategoryContent']);
 
 //Route::get('/store/products', [PersonnaliseController::class, 'getStoreProducts']);
@@ -175,14 +183,15 @@ Route::get('Y/fandoms', [PersonnaliseController::class, 'getFandoms']);
 // Search fandoms by query: /api/fandoms/search?q=QUERY
 Route::get('Y/fandoms/search', [PersonnaliseController::class, 'searchFandoms']);
 
+// Get fandoms by category: /api/categories/{category_id}/fandoms
+Route::get('Y/categories/{category_id}/fandoms', [PersonnaliseController::class, 'getFandomsByCategory']);
 
 // Get posts for a fandom
 Route::get('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'getFandomPosts']);
 // Get members (users) for a fandom
 Route::get('Y/fandoms/{fandom_id}/members', [PersonnaliseController::class, 'getFandomMembers']);
 
-Route::get('Y/categories', [PersonnaliseController::class, 'getAllCategories']);
-Route::get('Y/categories/{category_id}/subcategories', [PersonnaliseController::class, 'getCategorySubcategories']);
+
 
 
 // Search users by name with pagination
@@ -212,23 +221,45 @@ Route::post('Y/favorites/{pProductId}/favorite', [PersonnaliseController::class,
 Route::delete('Y/favorites/{pProductId}/removefavorite', [PersonnaliseController::class, 'removeFavoriteProduct']);
 
 // Routes pour afficher les favoris
+<<<<<<< HEAD
 Route::get('Y/favorites/posts', [PersonnaliseController::class, 'getFavoritePosts']);
 Route::get('Y/favorites/products', [PersonnaliseController::class, 'getFavoriteProducts']);
+=======
+Route::get('Y/myfavorites/posts', [PersonnaliseController::class, 'getFavoritePosts']);
+Route::get('Y/myfavorites/products', [PersonnaliseController::class, 'getFavoriteProducts']);
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 
 Route::get('products', [ProductController::class, 'index']);
 Route::get('products/{product}', [ProductController::class, 'show']);
 
+<<<<<<< HEAD
 
+=======
+// Get limited edition products (drag products)
+Route::get('Y/products/drag', [PersonnaliseController::class, 'getDragProducts']);
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 
 Route::post('products', [ProductController::class, 'store']);
 Route::put('products/{product}', [ProductController::class, 'update']);
 Route::delete('products/{product}', [ProductController::class, 'destroy']);
 
+<<<<<<< HEAD
+=======
+
+
+Route::post('/ratings', [\App\Http\Controllers\RatingController::class, 'addOrUpdateRating']);
+Route::delete('/ratings', [\App\Http\Controllers\RatingController::class, 'deleteRating']);
+
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 // 🛒 COMMANDES
 Route::get('/orders', [OrderController::class, 'index']);
 Route::get('/orders/my-orders', [OrderController::class, 'getMyOrders']);
 Route::get('/orders/{order}', [OrderController::class, 'show']);
 Route::post('/orders', [OrderController::class, 'store']);
+<<<<<<< HEAD
+=======
+
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
 Route::put('/orders/{order}', [OrderController::class, 'update']);
 
@@ -242,6 +273,12 @@ Route::post('admin/users', [\App\Http\Controllers\Api\M_Controller::class, 'addU
 Route::put('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateUser']);
 Route::delete('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteUser']);
 });
+<<<<<<< HEAD
+=======
+
+Route::get('Y/categories/{category_id}/subcategories', [PersonnaliseController::class, 'getCategorySubcategories']);
+Route::get('Y/categories', [PersonnaliseController::class, 'getAllCategories']);
+>>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 
 
 // ====================
