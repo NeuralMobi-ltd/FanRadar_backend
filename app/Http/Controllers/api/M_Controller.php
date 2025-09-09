@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Schema;
 
 class M_Controller extends Controller
 {
@@ -39,7 +40,7 @@ class M_Controller extends Controller
     }
 
     /**
-     * a. Get all users (id, username, first_name, last_name, email, status, join_date, role, image)
+     * a. Get all users (tous les champs de la table users)
      * Route: GET /api/users
      */
     public function getAllUsers()
@@ -47,29 +48,35 @@ class M_Controller extends Controller
         $users = \App\Models\User::all()->map(function($user) {
             return [
                 'id' => $user->id,
-
-                'username' => $user->username ?? null,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
                 'email' => $user->email,
-                'status' => $user->status ?? 'active',
-                'join_date' => $user->created_at ? $user->created_at->toDateString() : null,
-                'role' => $user->role ?? null,
-                'image' => $user->profile_image,
+                'profile_image' => $user->profile_image,
+                'background_image' => $user->background_image,
+                'date_naissance' => $user->date_naissance,
+                'bio' => $user->bio,
+                'gender' => $user->gender,
+                'role' => $user->getRoleNames()->first() ?? 'user', // Premier rôle ou 'user' par défaut
+                'email_verified_at' => $user->email_verified_at,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+                // Statistiques supplémentaires
+                'posts_count' => $user->posts()->count(),
+                'followers_count' => $user->followers()->count(),
+                'following_count' => $user->following()->count(),
+                'fandoms_count' => $user->members()->count(),
             ];
         });
         return response()->json(['success' => true, 'data' => $users]);
     }
 
     /**
-     * b. Get user by id, email
+     * b. Get user by id, email (tous les champs de la table users)
      * Route: GET /api/user/{value}
      */
     public function getUser($value)
     {
-        $user = \App\Models\User::where('id', $value)
-            ->orWhere('email', $value)
-            ->first();
+        $user = \App\Models\User::where('id', $value)->orWhere('email', $value)->first();
         if (!$user) {
             return response()->json(['success' => false, 'error' => 'User not found'], 404);
         }
@@ -77,50 +84,72 @@ class M_Controller extends Controller
             'success' => true,
             'data' => [
                 'id' => $user->id,
-
-                'username' => $user->username ?? null,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
                 'email' => $user->email,
-                'status' => $user->status ?? 'active',
-                'join_date' => $user->created_at ? $user->created_at->toDateString() : null,
-                'role' => $user->role ?? null,
-                'image' => $user->profile_image,
+                'profile_image' => $user->profile_image,
+                'background_image' => $user->background_image,
+                'date_naissance' => $user->date_naissance,
+                'bio' => $user->bio,
+                'gender' => $user->gender,
+                'role' => $user->getRoleNames()->first() ?? 'user', // Premier rôle ou 'user' par défaut
+                'email_verified_at' => $user->email_verified_at,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+                // Statistiques supplémentaires
+                'posts_count' => $user->posts()->count(),
+                'followers_count' => $user->followers()->count(),
+                'following_count' => $user->following()->count(),
+                'fandoms_count' => $user->members()->count(),
             ]
         ]);
     }
 
     /**
-     * c. Add user (first_name, last_name, role, email)
+     * c. Add user (tous les champs disponibles) - Seul admin peut créer des utilisateurs
      * Route: POST /api/users
      */
     public function addUser(Request $request)
     {
         $request->validate([
-            'first_name' => 'required|string',
-            'last_name' => 'required|string',
-
-            'email' => 'required|email|unique:users,email',            'role' => 'in:user,admin',
             'email' => 'required|email|unique:users,email',
-            'role' => 'required|in:user,admin',
             'password' => 'required|string|min:6',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            // Champs optionnels
+            'profile_image' => 'nullable|string|max:500',
+            'background_image' => 'nullable|string|max:500',
+            'date_naissance' => 'nullable|date',
+            'bio' => 'nullable|string|max:1000',
+            'gender' => 'nullable|string|in:male,female,other',
+            'role' => 'nullable|in:user,admin,writer',
         ]);
+
         $user = \App\Models\User::create([
+            'email' => $request->email,
+            'password' => bcrypt($request->password),
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
-            'email' => $request->email,
-            'profile_image' => $request->profile_image ?? null,
-            'password' => bcrypt($request->password),
-            'role' => $request->role ?? 'user', // <-- PREND LA VALEUR ENVOYÉE
-
-
-            'status' => 'active',
-            'profile_image' => $request->profile_image ?? null,
-            'password' => bcrypt($request->password),
-            'role' => $request->role,
-
+            'profile_image' => $request->profile_image,
+            'background_image' => $request->background_image,
+            'date_naissance' => $request->date_naissance,
+            'bio' => $request->bio,
+            'gender' => $request->gender,
         ]);
-        return response()->json(['success' => true, 'data' => $user], 201);
+
+        // Assigner le rôle avec Spatie Permissions
+        if ($request->role) {
+            $user->assignRole($request->role);
+        } else {
+            $user->assignRole('user'); // Rôle par défaut
+        }
+
+        // Recharger l'utilisateur avec les rôles
+        $user = $user->fresh();
+        $userData = $user->toArray();
+        $userData['role'] = $user->getRoleNames()->first() ?? 'user'; // Premier rôle ou 'user' par défaut
+
+        return response()->json(['success' => true, 'data' => $userData], 201);
     }
 
     /**
@@ -133,19 +162,61 @@ class M_Controller extends Controller
         if (!$user) {
             return response()->json(['success' => false, 'error' => 'User not found'], 404);
         }
-        // Met à jour tous les champs envoyés dans la requête, sans toucher aux autres
-        $updatable = ['first_name', 'last_name', 'email', 'status', 'profile_image', 'role', 'password'];
+
+        $request->validate([
+            'email' => 'nullable|email|unique:users,email,' . $id,
+            'password' => 'nullable|string|min:6',
+            'first_name' => 'nullable|string|max:255',
+            'last_name' => 'nullable|string|max:255',
+            'date_naissance' => 'nullable|date',
+            'bio' => 'nullable|string|max:1000',
+            'gender' => 'nullable|string|in:male,female,other',
+            'role' => 'nullable|in:user,admin,writer',
+        ]);
+
+        // Met à jour tous les champs envoyés dans la requête
+        $updatable = ['first_name', 'last_name', 'email', 'profile_image', 'background_image', 'date_naissance', 'bio', 'gender'];
         foreach ($updatable as $field) {
             if ($request->has($field)) {
-                if ($field === 'password') {
-                    $user->password = bcrypt($request->password);
-                } else {
-                    $user->$field = $request->$field;
-                }
+                $user->$field = $request->$field;
             }
         }
+
+        // Gérer le mot de passe séparément
+        if ($request->has('password')) {
+            $user->password = bcrypt($request->password);
+        }
+
         $user->save();
-        return response()->json(['success' => true, 'data' => $user]);
+
+        // Mettre à jour le rôle avec Spatie Permissions si fourni
+        if ($request->has('role')) {
+            $user->syncRoles([$request->role]); // syncRoles remplace tous les rôles existants
+        }
+
+        // Recharger l'utilisateur avec les rôles
+        $user = $user->fresh();
+        $userData = $user->toArray();
+        $userData['role'] = $user->getRoleNames()->first() ?? 'user'; // Premier rôle ou 'user' par défaut
+
+        return response()->json(['success' => true, 'data' => $userData]);
+    }
+
+    /**
+     * e. Delete user (id)
+     * Route: DELETE /api/M/users/{id}
+     */
+    public function deleteUser($id)
+    {
+        $user = \App\Models\User::find($id);
+        if (!$user) {
+            return response()->json(['success' => false, 'error' => 'User not found'], 404);
+        }
+
+        // Supprimer l'utilisateur
+        $user->delete();
+
+        return response()->json(['success' => true, 'message' => 'User deleted successfully']);
     }
 
     /**
@@ -156,7 +227,7 @@ class M_Controller extends Controller
     {
         $categories = \App\Models\Category::select('id', 'name')->get();
         return response()->json(['success' => true, 'data' => $categories]);
-    } 
+    }
 
     /**
      * g. Get subcategories (id, cat_id, name)
@@ -264,12 +335,13 @@ class M_Controller extends Controller
                 return [
                     'id' => $post->id,
                     'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
-                    'fandom' => $post->fandom ?? 'general',
+                    'fandom' => $post->fandom ? $post->fandom->name : 'General',
                     'date' => $post->created_at,
                     'likes' => $post->likes ?? 0,
                     'category' => $post->category->name ?? null,
-                    'title' => $post->title,
-                    'content' => $post->content,
+                    // provide title/content from DB description if title/content columns not present
+                    'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                    'content' => $post->content ?? $post->description ?? null,
                     'media' => $post->medias->filter(function($media) {
                         return !empty($media->file_path);
                     })->map(function($media) {
@@ -284,19 +356,26 @@ class M_Controller extends Controller
     public function addPostSimple(Request $request)
     {
         $request->validate([
-            'author_id' => 'required|integer|exists:users,id',
-            'title' => 'required|string',
-            'content' => 'required|string',
+            'user_id' => 'required_without:author_id|integer|exists:users,id',
+            'author_id' => 'required_without:user_id|integer|exists:users,id',
+            'title' => 'nullable|string',
+            'content' => 'nullable|string',
         ]);
 
-        // 1. Crée le post d'abord
-        $post = \App\Models\Post::create([
-            'user_id' => $request->author_id,
-            'title' => $request->title,
-            'content' => $request->content,
-            'category_id' => $request->category_id ?? null,
-            'subcategory_id' => $request->subcategory_id ?? null,
-        ]);
+        $authorId = $request->user_id ?? $request->author_id;
+
+        // Build data only with columns that actually exist in the posts table
+        $columns = Schema::getColumnListing('posts');
+        $data = [];
+        if (in_array('user_id', $columns)) $data['user_id'] = $authorId;
+        // Map incoming title/content into description column if title/content not present
+        if (in_array('title', $columns)) $data['title'] = $request->title ?? null;
+        if (in_array('content', $columns)) $data['content'] = $request->content ?? null;
+        if (in_array('description', $columns)) $data['description'] = $request->content ?? $request->title ?? $request->description ?? null;
+        if (in_array('category_id', $columns) && $request->filled('category_id')) $data['category_id'] = $request->category_id;
+        if (in_array('subcategory_id', $columns) && $request->filled('subcategory_id')) $data['subcategory_id'] = $request->subcategory_id;
+
+        $post = \App\Models\Post::create($data);
 
         // 2. Puis upload les fichiers et lie-les au post
         if ($request->hasFile('media')) {
@@ -306,28 +385,29 @@ class M_Controller extends Controller
                 if ($file && $file->isValid()) {
                     $path = $file->store('images', 'public');
                     $post->medias()->create([
-                        'file_path' => 'storage/' . $path,
+                        'file_path' => $path,
                         'media_type' => $file->getClientMimeType(),
                     ]);
                 }
             }
         }
 
-        // Recharge le post avec la relation medias
-        $post = \App\Models\Post::with('medias')->find($post->id);
+        // Recharge le post avec les relations utiles
+        $post = \App\Models\Post::with(['medias','user','category','subcategory','fandom'])->find($post->id);
 
         return response()->json([
             'success' => true,
             'data' => [
                 'id' => $post->id,
-                'user_id' => $post->user_id,
-                'title' => $post->title,
-                'content' => $post->content,
-                'category_id' => $post->category_id,
-                'subcategory_id' => $post->subcategory_id,
+                'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
+                'fandom' => $post->fandom ? $post->fandom->name : 'General',
+                'category_id' => in_array('category_id', $columns) ? ($post->category_id ?? null) : null,
+                'subcategory_id' => in_array('subcategory_id', $columns) ? ($post->subcategory_id ?? null) : null,
+                'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                'content' => $post->content ?? $post->description ?? null,
                 'created_at' => $post->created_at,
                 'updated_at' => $post->updated_at,
-                'media' => $post->medias->pluck('file_path')->toArray(),
+                'media' => $post->medias->filter(function($m) { return !empty($m->file_path); })->map(function($m) { return asset('storage/' . $m->file_path); })->values()->toArray(),
             ]
         ], 201);
     }
@@ -346,14 +426,23 @@ class M_Controller extends Controller
     {
         $post = \App\Models\Post::find($id);
         if (!$post) return response()->json(['success' => false, 'error' => 'Post not found'], 404);
-        
-        $updateData = $request->only(['title', 'content', 'category_id', 'subcategory_id']);
+
+        $columns = Schema::getColumnListing('posts');
+        $updatable = array_intersect(['title', 'content', 'category_id', 'subcategory_id', 'fandom_id'], $columns);
+
+        $updateData = $request->only($updatable);
         if ($request->has('media')) {
             $updateData['media'] = $request->media;
         }
-        
+
         $post->update($updateData);
-        
+
+        // If description exists but title/content columns do not, update description from request
+        if (in_array('description', $columns) && ($request->filled('content') || $request->filled('title'))) {
+            $post->description = $request->content ?? $request->title ?? $post->description;
+            $post->save();
+        }
+
         // Mettre à jour les tags si fournis
         if ($request->has('tags') && is_array($request->tags)) {
             $post->tags()->detach(); // Supprimer tous les tags existants
@@ -362,8 +451,19 @@ class M_Controller extends Controller
                 $post->tags()->attach($tag->id);
             }
         }
-        
-        return response()->json(['success' => true, 'data' => $post]);
+
+        // Recharge le post avec relations utiles
+        $post = \App\Models\Post::with(['medias','user','category','subcategory','fandom'])->find($post->id);
+
+        return response()->json(['success' => true, 'data' => [
+            'id' => $post->id,
+            'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
+            'fandom' => $post->fandom ? $post->fandom->name : 'General',
+            'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+            'content' => $post->content ?? $post->description ?? null,
+            'media' => $post->medias->filter(function($m) { return !empty($m->file_path); })->map(function($m) { return asset('storage/' . $m->file_path); })->values()->toArray(),
+            'updated_at' => $post->updated_at,
+        ]]);
     }
 
     // e. Get posts by tag
@@ -378,12 +478,12 @@ class M_Controller extends Controller
             return [
                 'id' => $post->id,
                 'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
-                'fandom' => $post->fandom ?? 'general',
+                'fandom' => $post->fandom ? $post->fandom->name : 'General',
                 'date' => $post->created_at,
                 'likes' => $post->likes ?? 0,
                 'category' => $post->category->name ?? null,
-                'title' => $post->title,
-                'content' => $post->content,
+                'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                'content' => $post->content ?? $post->description ?? null,
                 'media' => $post->medias->filter(function($media) {
                     return !empty($media->file_path);
                 })->map(function($media) {
@@ -410,12 +510,12 @@ class M_Controller extends Controller
                 return [
                     'id' => $post->id,
                     'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
-                    'fandom' => $post->fandom ?? 'general',
+                    'fandom' => $post->fandom ? $post->fandom->name : 'General',
                     'date' => $post->created_at,
                     'likes' => $post->likes ?? 0,
                     'category' => $post->category->name ?? null,
-                    'title' => $post->title,
-                    'content' => $post->content,
+                    'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                    'content' => $post->content ?? $post->description ?? null,
                     'media' => $post->medias->filter(function($media) {
                         return !empty($media->file_path);
                     })->map(function($media) {
@@ -436,12 +536,12 @@ class M_Controller extends Controller
                 return [
                     'id' => $post->id,
                     'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
-                    'fandom' => $post->fandom ?? 'general',
+                    'fandom' => $post->fandom ? $post->fandom->name : 'General',
                     'date' => $post->created_at,
                     'likes' => $post->likes ?? 0,
                     'category' => $post->category->name ?? null,
-                    'title' => $post->title,
-                    'content' => $post->content,
+                    'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                    'content' => $post->content ?? $post->description ?? null,
                     'media' => $post->medias->filter(function($media) {
                         return !empty($media->file_path);
                     })->map(function($media) {
@@ -462,12 +562,12 @@ class M_Controller extends Controller
                 return [
                     'id' => $post->id,
                     'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
-                    'fandom' => $post->fandom ?? 'general',
+                    'fandom' => $post->fandom ? $post->fandom->name : 'General',
                     'date' => $post->created_at,
                     'likes' => $post->likes ?? 0,
                     'category' => $post->category->name ?? null,
-                    'title' => $post->title,
-                    'content' => $post->content,
+                    'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                    'content' => $post->content ?? $post->description ?? null,
                     'media' => $post->medias->filter(function($media) {
                         return !empty($media->file_path);
                     })->map(function($media) {
@@ -478,120 +578,281 @@ class M_Controller extends Controller
         return response()->json(['success' => true, 'data' => $posts]);
     }
 
-    /**
-     * PRODUCTS
-     */
-    // a. Get products (id, name, type, price, stock, date, revenue, description) (no drops)
-    // URL: GET /api/products-simple
-    public function getAllProductsSimple()
+    // === VERSIONS CUSTOM DES POSTS (retournent le nom du fandom ou 'General') ===
+    public function getAllPostsCustom()
     {
-        $products = \App\Models\Product::whereNull('sale_end_date')
-            ->select('id', 'product_name as name', 'type', 'price', 'stock', 'sale_start_date as date', 'revenue', 'description')
+        $posts = \App\Models\Post::with(['user:id,first_name,last_name', 'category:id,name', 'subcategory:id,name', 'medias', 'fandom:id,name', 'tags'])
             ->get()
-            ->map(function($product) {
+            ->map(function($post) {
                 return [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'type' => $product->type,
-                    'price' => $product->price,
-                    'stock' => $product->stock,
-                    'date' => $product->date,
-                    'revenue' => $product->revenue ?? 0,
-
+                    'id' => $post->id,
+                    'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
+                    'fandom' => $post->fandom ? $post->fandom->name : 'General',
+                    'date' => $post->created_at,
+                    'likes' => $post->likes ?? 0,
+                    'category' => $post->category->name ?? null,
+                    'subcategory' => $post->subcategory->name ?? null,
+                    'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                    'content' => $post->content ?? $post->description ?? null,
+                    'media' => $post->medias->filter(function($media) {
+                        return !empty($media->file_path);
+                    })->map(function($media) {
+                        return asset('storage/' . $media->file_path);
+                    })->values()->toArray(),
                 ];
             });
-        return response()->json(['success' => true, 'data' => $products]);
+        return response()->json(['success' => true, 'data' => $posts]);
     }
 
-    // add product (name, type, date, price, stock) - revenue calculé automatiquement
-    // URL: POST /api/products-simple
-    public function addProductSimple(Request $request)
+    public function addPost(Request $request)
     {
         $request->validate([
-            'name' => 'required|string',
-            'type' => 'required|string',
-            'date' => 'required|date',
-            'price' => 'required|numeric',
-            'stock' => 'required|integer',
+            'user_id' => 'required_without:author_id|integer|exists:users,id',
+            'author_id' => 'required_without:user_id|integer|exists:users,id',
+            'title' => 'nullable|string',
+            'content' => 'nullable|string',
+            'category_id' => 'nullable|integer|exists:categories,id',
+            'subcategory_id' => 'nullable|integer|exists:subcategories,id',
+            'fandom_id' => 'nullable|integer|exists:fandoms,id',
+            'media' => 'nullable|array',
+            'media.*' => 'file|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
-        // Exemple de calcul automatique du revenu (prix * stock)
-        $revenue = $request->price * $request->stock;
-        $product = \App\Models\Product::create([
-            'product_name' => $request->name,
-            'type' => $request->type,
-            'sale_start_date' => $request->date,
-            'price' => $request->price,
-            'stock' => $request->stock,
-            'revenue' => $revenue,
-            'content_status' => 'active',
-        ]);
-        return response()->json(['success' => true, 'data' => $product], 201);
-    }
 
-    // get drops (start and end date)
-    // URL: GET /api/drops-simple
-    public function getDropsSimple()
-    {
-        $drops = \App\Models\Product::whereNotNull('sale_start_date')->whereNotNull('sale_end_date')
-            ->select('id', 'product_name as name', 'type', 'price', 'stock', 'promotion', 'sale_start_date', 'sale_end_date', 'revenue', 'description')
-            ->get();
-        return response()->json(['success' => true, 'data' => $drops]);
-    }
+        $authorId = $request->input('author_id') ?? $request->input('user_id');
 
-    // add drop
-    // URL: POST /api/drops-simple
-    public function addDropSimple(Request $request)
-    {
-        $request->validate([
-            'name' => 'required|string',
-            'type' => 'nullable|string',
-            'price' => 'required|numeric',
-            'stock' => 'required|integer',
-            'promotion' => 'nullable|numeric',
-            'sale_start_date' => 'required|date',
-            'sale_end_date' => 'required|date|after_or_equal:sale_start_date',
-            'description' => 'nullable|string',
-            'revenue' => 'nullable|numeric',
-        ]);
-        $drop = \App\Models\Product::create([
-            'product_name' => $request->name,
-            'type' => $request->type,
-            'price' => $request->price,
-            'stock' => $request->stock,
-            'promotion' => $request->promotion,
-            'sale_start_date' => $request->sale_start_date,
-            'sale_end_date' => $request->sale_end_date,
-            'description' => $request->description,
-            'revenue' => $request->revenue,
-            'content_status' => 'active',
-        ]);
-        return response()->json(['success' => true, 'data' => $drop], 201);
-    }
+        // Only include columns that exist in DB to avoid QueryException
+        $columns = Schema::getColumnListing('posts');
+        $data = [];
+        if (in_array('user_id', $columns)) $data['user_id'] = $authorId;
+        if (in_array('title', $columns) && $request->filled('title')) $data['title'] = $request->title;
+        if (in_array('content', $columns) && $request->filled('content')) $data['content'] = $request->content;
+        // Map incoming content/title into description when appropriate
+        if (in_array('description', $columns)) $data['description'] = $request->content ?? $request->title ?? $request->description ?? null;
+        if (in_array('category_id', $columns) && $request->filled('category_id')) $data['category_id'] = $request->category_id;
+        if (in_array('subcategory_id', $columns) && $request->filled('subcategory_id')) $data['subcategory_id'] = $request->subcategory_id;
+        if (in_array('fandom_id', $columns) && $request->filled('fandom_id')) $data['fandom_id'] = $request->fandom_id;
 
-    // update product or drop
-    // URL: PUT /api/products-simple/{id}
-    public function updateProductSimple(Request $request, $id)
-    {
-        $product = \App\Models\Product::find($id);
-        if (!$product) return response()->json(['success' => false, 'error' => 'Product not found'], 404);
-        $fields = ['product_name', 'type', 'price', 'stock', 'promotion', 'sale_start_date', 'sale_end_date', 'description', 'revenue'];
-        foreach ($fields as $field) {
-            if ($request->has($field)) {
-                $product->$field = $request->$field;
+        $post = \App\Models\Post::create($data);
+
+        // Upload media files if present
+        if ($request->hasFile('media')) {
+            $files = $request->file('media');
+            if (!is_array($files)) $files = [$files];
+            foreach ($files as $file) {
+                if ($file && $file->isValid()) {
+                    $path = $file->store('images', 'public');
+                    $post->medias()->create([
+                        'file_path' => $path,
+                        'media_type' => $file->getClientMimeType(),
+                    ]);
+                }
             }
         }
-        $product->save();
-        return response()->json(['success' => true, 'data' => $product]);
+
+        // Tags (store in DB but don't expose tag ids/names in the response)
+        if ($request->has('tags') && is_array($request->tags)) {
+            foreach ($request->tags as $tagName) {
+                $tag = \App\Models\Tag::firstOrCreate(['tag_name' => $tagName]);
+                $post->tags()->attach($tag->id);
+            }
+        }
+
+        $post = \App\Models\Post::with(['user:id,first_name,last_name','category','subcategory','medias','fandom'])->find($post->id);
+
+        $result = [
+            'id' => $post->id,
+            'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
+            'fandom' => $post->fandom ? $post->fandom->name : 'General',
+            'category' => in_array('category_id', $columns) ? ($post->category->name ?? null) : null,
+            'subcategory' => in_array('subcategory_id', $columns) ? ($post->subcategory->name ?? null) : null,
+            'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+            'content' => $post->content ?? $post->description ?? null,
+            'media' => $post->medias->filter(function($m) { return !empty($m->file_path); })->map(function($m) { return asset('storage/' . $m->file_path); })->values()->toArray(),
+            'created_at' => $post->created_at,
+        ];
+
+        return response()->json(['success' => true, 'data' => $result], 201);
     }
 
-    // delete product or drop
-    // URL: DELETE /api/products-simple/{id}
-    public function deleteProductSimple($id)
+    public function updatePost(Request $request, $id)
     {
-        $product = \App\Models\Product::find($id);
-        if (!$product) return response()->json(['success' => false, 'error' => 'Product not found'], 404);
-        $product->delete();
-        return response()->json(['success' => true, 'message' => 'Product deleted']);
+        $post = \App\Models\Post::find($id);
+        if (!$post) return response()->json(['success' => false, 'error' => 'Post not found'], 404);
+
+        $columns = Schema::getColumnListing('posts');
+        $updatable = array_intersect(['title', 'content', 'category_id', 'subcategory_id', 'fandom_id'], $columns);
+
+        foreach ($updatable as $field) {
+            if ($request->has($field)) {
+                $post->$field = $request->$field;
+            }
+        }
+
+        // If title/content don't exist but description exists, update description accordingly
+        if (in_array('description', $columns) && ($request->has('content') || $request->has('title'))) {
+            $post->description = $request->content ?? $request->title ?? $post->description;
+        }
+
+        $post->save();
+
+        if ($request->hasFile('media')) {
+            $files = $request->file('media');
+            if (!is_array($files)) $files = [$files];
+            foreach ($files as $file) {
+                if ($file && $file->isValid()) {
+                    $path = $file->store('images', 'public');
+                    $post->medias()->create([
+                        'file_path' => $path,
+                        'media_type' => $file->getClientMimeType(),
+                    ]);
+                }
+            }
+        }
+
+        if ($request->has('tags') && is_array($request->tags)) {
+            $post->tags()->detach();
+            foreach ($request->tags as $tagName) {
+                $tag = \App\Models\Tag::firstOrCreate(['tag_name' => $tagName]);
+                $post->tags()->attach($tag->id);
+            }
+        }
+
+        $post = \App\Models\Post::with(['user:id,first_name,last_name','category','subcategory','medias','fandom'])->find($post->id);
+
+        $result = [
+            'id' => $post->id,
+            'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
+            'fandom' => $post->fandom ? $post->fandom->name : 'General',
+            'category' => in_array('category_id', $columns) ? ($post->category->name ?? null) : null,
+            'subcategory' => in_array('subcategory_id', $columns) ? ($post->subcategory->name ?? null) : null,
+            'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+            'content' => $post->content ?? $post->description ?? null,
+            'media' => $post->medias->filter(function($m) { return !empty($m->file_path); })->map(function($m) { return asset('storage/' . $m->file_path); })->values()->toArray(),
+            'updated_at' => $post->updated_at,
+        ];
+
+        return response()->json(['success' => true, 'data' => $result]);
+    }
+
+    public function deletePost($id)
+    {
+        $post = \App\Models\Post::find($id);
+        if (!$post) return response()->json(['success' => false, 'error' => 'Post not found'], 404);
+        $post->delete();
+        return response()->json(['success' => true, 'message' => 'Post deleted']);
+    }
+
+    public function getPostsByTag($tag)
+    {
+        $posts = \App\Models\Post::whereHas('tags', function($q) use ($tag) {
+            $q->where('tag_name', $tag);
+        })->with(['user:id,first_name,last_name','category','subcategory','medias','fandom'])
+        ->get()
+        ->map(function($post) {
+            return [
+                'id' => $post->id,
+                'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
+                'fandom' => $post->fandom ? $post->fandom->name : 'General',
+                'date' => $post->created_at,
+                'likes' => $post->likes ?? 0,
+                'category' => $post->category->name ?? null,
+                'subcategory' => $post->subcategory->name ?? null,
+                'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                'content' => $post->content ?? $post->description ?? null,
+                'media' => $post->medias->filter(function($media) {
+                    return !empty($media->file_path);
+                })->map(function($media) {
+                    return asset('storage/' . $media->file_path);
+                })->values()->toArray(),
+            ];
+        });
+        return response()->json(['success' => true, 'data' => $posts]);
+    }
+
+    public function getPostsByCategory($category_id)
+    {
+        $posts = \App\Models\Post::where('category_id', $category_id)
+            ->with(['user:id,first_name,last_name','category','subcategory','medias','fandom'])
+            ->get()
+            ->map(function($post) {
+                return [
+                    'id' => $post->id,
+                    'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
+                    'fandom' => $post->fandom ? $post->fandom->name : 'General',
+                    'date' => $post->created_at,
+                    'likes' => $post->likes ?? 0,
+                    'category' => $post->category->name ?? null,
+                    'subcategory' => $post->subcategory->name ?? null,
+                    'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                    'content' => $post->content ?? $post->description ?? null,
+                    'media' => $post->medias->filter(function($media) {
+                        return !empty($media->file_path);
+                    })->map(function($media) {
+                        return asset('storage/' . $media->file_path);
+                    })->values()->toArray(),
+                ];
+            });
+        return response()->json(['success' => true, 'data' => $posts]);
+    }
+
+    public function getPostsBySubcategory($subcategory_id)
+    {
+        $posts = \App\Models\Post::where('subcategory_id', $subcategory_id)
+            ->with(['user:id,first_name,last_name','category','subcategory','medias','fandom'])
+            ->get()
+            ->map(function($post) {
+                return [
+                    'id' => $post->id,
+                    'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
+                    'fandom' => $post->fandom ? $post->fandom->name : 'General',
+                    'date' => $post->created_at,
+                    'likes' => $post->likes ?? 0,
+                    'category' => $post->category->name ?? null,
+                    'subcategory' => $post->subcategory->name ?? null,
+                    'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                    'content' => $post->content ?? $post->description ?? null,
+                    'media' => $post->medias->filter(function($media) {
+                        return !empty($media->file_path);
+                    })->map(function($media) {
+                        return asset('storage/' . $media->file_path);
+                    })->values()->toArray(),
+                ];
+            });
+        return response()->json(['success' => true, 'data' => $posts]);
+    }
+
+    public function getFandomPosts($fandom_id)
+    {
+        if ($fandom_id === 'general' || $fandom_id === null || (is_string($fandom_id) && strtolower($fandom_id) === 'null')) {
+            $posts = \App\Models\Post::whereNull('fandom_id')
+                ->with(['user:id,first_name,last_name','category','subcategory','medias'])
+                ->get();
+        } else {
+            $posts = \App\Models\Post::where('fandom_id', $fandom_id)
+                ->with(['user:id,first_name,last_name','category','subcategory','medias','fandom'])
+                ->get();
+        }
+
+        $result = $posts->map(function($post) {
+            return [
+                'id' => $post->id,
+                'author' => $post->user ? trim($post->user->first_name . ' ' . ($post->user->last_name ?? '')) : null,
+                'fandom' => $post->fandom ? $post->fandom->name : 'General',
+                'date' => $post->created_at,
+                'likes' => $post->likes ?? 0,
+                'category' => $post->category->name ?? null,
+                'subcategory' => $post->subcategory->name ?? null,
+                'title' => $post->title ?? (is_string($post->description) ? (mb_strimwidth($post->description, 0, 50, '...')) : null),
+                'content' => $post->content ?? $post->description ?? null,
+                'media' => $post->medias->filter(function($media) {
+                    return !empty($media->file_path);
+                })->map(function($media) {
+                    return asset('storage/' . $media->file_path);
+                })->values()->toArray(),
+            ];
+        });
+
+        return response()->json(['success' => true, 'data' => $result]);
     }
 
     /**

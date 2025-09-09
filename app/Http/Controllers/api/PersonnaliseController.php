@@ -712,27 +712,36 @@ class PersonnaliseController extends Controller
         $page = $request->get('page', 1);
         $limit = $request->get('limit', 20);
 
-        $posts = Post::with(['user', 'medias'])
+        $posts = Post::with(['user', 'medias', 'tags'])
             ->orderBy('created_at', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
 
         $formattedPosts = $posts->map(function ($post) {
-            $user = $post->user;
-            // La relation favorites() sur le post ne contient que les favoris de ce post
-            $likeCount = method_exists($post, 'favorites')
-                ? $post->favorites()->count()
-                : 0;
-            $commentCount = method_exists($post, 'comments') ? $post->comments()->count() : 0;
-            $media = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
-            return [
-                'id' => $post->id,
-                'content' => $post->content ?? $post->body ?? '',
-                'media' => $media,
-                'user' => $user ? $user->toArray() : null,
-                'likes_count' => $likeCount,
-                'comments_count' => $commentCount,
-                'created_at' => $post->created_at ? $post->created_at->toISOString() : null
-            ];
+            // Récupérer toutes les données du post
+            $postData = $post->toArray();
+
+            // Ajouter les compteurs
+            $postData['likes_count'] = method_exists($post, 'favorites') ? $post->favorites()->count() : 0;
+            $postData['comments_count'] = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+
+            // Ajouter les médias
+            $postData['media'] = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
+
+            // Ajouter les tags
+            $postData['tags'] = method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [];
+
+            // Supprimer le champ medias (garder seulement media)
+            unset($postData['medias']);
+
+            // Formater l'utilisateur
+            if (isset($postData['user']) && is_array($postData['user'])) {
+                // Supprimer les champs sensibles de l'utilisateur
+                unset($postData['user']['password']);
+                unset($postData['user']['email_verified_at']);
+                unset($postData['user']['remember_token']);
+            }
+
+            return $postData;
         });
 
         return response()->json([
@@ -753,6 +762,110 @@ class PersonnaliseController extends Controller
         //not implemented yet
      }
 
+
+    public function addFavoriteProduct($pProductId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        // Vérifier que le produit existe
+        $product = Product::find($pProductId);
+        if (!$product) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product not found'
+            ], 404);
+        }
+
+        // Vérifier si déjà en favori
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $product->id,
+            'favoriteable_type' => 'App\\Models\\Product',
+        ])->first();
+
+        if ($existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce produit est déjà dans vos favoris.'
+            ], 409);
+        }
+
+        // Créer le favori
+        Favorite::create([
+            'user_id' => $user->id,
+            'favoriteable_id' => $product->id,
+            'favoriteable_type' => 'App\\Models\\Product',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le produit a été ajouté aux favoris avec succès.'
+        ], 201);
+    }
+
+    public function addFavorite($type, $itemId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        // Valider le type
+        if (!in_array($type, ['post', 'product'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Type invalide. Utilisez "post" ou "product".'
+            ], 400);
+        }
+
+        // Déterminer le modèle à utiliser
+        $modelClass = $type === 'post' ? Post::class : Product::class;
+        $modelName = $type === 'post' ? 'Post' : 'Product';
+
+        // Vérifier que l'élément existe
+        $item = $modelClass::find($itemId);
+        if (!$item) {
+            return response()->json([
+                'success' => false,
+                'message' => $modelName . ' not found'
+            ], 404);
+        }
+
+        // Vérifier si déjà en favori
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $item->id,
+            'favoriteable_type' => $modelClass,
+        ])->first();
+
+        if ($existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cet élément est déjà dans vos favoris.'
+            ], 409);
+        }
+
+        // Créer le favori
+        Favorite::create([
+            'user_id' => $user->id,
+            'favoriteable_id' => $item->id,
+            'favoriteable_type' => $modelClass,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'L\'élément a été ajouté aux favoris avec succès.'
+        ], 201);
+    }
 
     public function addfavoritePost($postId)
     {
@@ -797,6 +910,89 @@ class PersonnaliseController extends Controller
             'success' => true,
             'message' => 'Le post a été ajouté aux favoris avec succès.'
         ], 201);
+    }
+
+    public function removefavoritePost($postId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found'
+            ], 404);
+        }
+
+        // Vérifier si le favori existe
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $post->id,
+            'favoriteable_type' => 'App\\Models\\Post',
+        ])->first();
+
+        if (!$existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce post n\'est pas dans vos favoris.'
+            ], 404);
+        }
+
+        // Supprimer le favori
+        $existingFavorite->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le post a été retiré des favoris avec succès.'
+        ], 200);
+    }
+
+    public function removeFavoriteProduct($pProductId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        // Vérifier que le produit existe
+        $product = Product::find($pProductId);
+        if (!$product) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product not found'
+            ], 404);
+        }
+
+        // Vérifier si le favori existe
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $product->id,
+            'favoriteable_type' => 'App\\Models\\Product',
+        ])->first();
+
+        if (!$existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce produit n\'est pas dans vos favoris.'
+            ], 404);
+        }
+
+        // Supprimer le favori
+        $existingFavorite->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le produit a été retiré des favoris avec succès.'
+        ], 200);
     }
 
     /**
@@ -1086,6 +1282,7 @@ class PersonnaliseController extends Controller
                 ];
             }
 
+<<<<<<< HEAD
             // Counts optionnels
             $num_members = null;
             $num_posts = null;
@@ -1108,6 +1305,152 @@ class PersonnaliseController extends Controller
                 'moderator' => $moderator,
                 'num_members' => $num_members,
                 'num_posts' => $num_posts,
+=======
+            return $attrs;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'fandoms' => $formatted
+            ]
+        ]);
+    }
+
+    public function getTrendingFandoms()
+    {
+        try {
+            // Récupérer tous les fandoms avec le nombre de membres et de posts, triés par nombre de membres décroissant
+            $fandoms = \App\Models\Fandom::withCount(['members', 'posts'])
+                ->orderByDesc('members_count')
+                ->get();
+
+            // Vérifier s'il y a des fandoms
+            if ($fandoms->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No fandoms found',
+                    'data' => [
+                        'fandoms' => [],
+                        'total' => 0
+                    ]
+                ]);
+            }
+
+            // Formater les fandoms pour inclure toutes les informations de la table + compteurs
+            $formattedFandoms = $fandoms->map(function ($fandom) {
+                // Récupérer toutes les données de la table fandom
+                $fandomData = $fandom->toArray();
+
+                // Ajouter les compteurs
+                $fandomData['members_count'] = $fandom->members_count ?? 0;
+                $fandomData['posts_count'] = $fandom->posts_count ?? 0;
+
+                return $fandomData;
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'fandoms' => $formattedFandoms,
+                    'total' => $fandoms->count()
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error retrieving trending fandoms: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Rechercher des fandoms par q
+     * Route: GET /api/fandoms/search?q=QUERY
+     */
+    public function searchFandoms(Request $request)
+    {
+        $user = Auth::user();
+        $q = $request->get('q', '');
+
+        // base query: eager load subcategory and include counts
+        $query = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members']);
+
+        if (!empty($q)) {
+            // recherche sur le nom et la description
+            $query->where(function ($builder) use ($q) {
+                $builder->where('name', 'like', "%{$q}%")
+                        ->orWhere('description', 'like', "%{$q}%");
+            });
+        }
+
+        $fandoms = $query->get();
+
+        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
+        $userMemberships = [];
+        if ($user) {
+            $memberships = \App\Models\Member::where('user_id', $user->id)->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
+
+        $formatted = $fandoms->map(function ($f) use ($userMemberships) {
+            $attrs = $f->toArray();
+            $attrs['posts_count'] = $f->posts_count ?? 0;
+            $attrs['members_count'] = $f->members_count ?? 0;
+
+            // Ajouter les informations de membership
+            $attrs['is_member'] = isset($userMemberships[$f->id]);
+            $attrs['member_role'] = $userMemberships[$f->id] ?? null;
+
+            if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
+                $attrs['subcategory'] = [
+                    'id' => $attrs['subcategory']['id'] ?? null,
+                    'name' => $attrs['subcategory']['name'] ?? null,
+                ];
+            }
+            return $attrs;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'fandoms' => $formatted,
+                'query' => $q
+            ]
+        ]);
+    }
+
+
+        /**
+     * Récupérer les fandoms d'une sous-catégorie
+     * Route: GET /api/subcategories/{subcategoryId}/fandoms
+     */
+
+
+    /**
+     * Récupérer un fandom par id et inclure le statut du member de l'utilisateur authentifié
+     * Route: GET /api/fandoms/{fandom_id} (route already registered)
+     */
+    public function getfandombyId($fandomId, Request $request)
+    {
+        $user = Auth::user();
+
+        $fandom = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->find($fandomId);
+        if (!$fandom) {
+            return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+        }
+
+        $attrs = $fandom->toArray();
+        $attrs['posts_count'] = $fandom->posts_count ?? 0;
+        $attrs['members_count'] = $fandom->members_count ?? 0;
+
+        if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
+            $attrs['subcategory'] = [
+                'id' => $attrs['subcategory']['id'] ?? null,
+                'name' => $attrs['subcategory']['name'] ?? null,
+>>>>>>> eb7643fc1880c519cee613c255268d196bfc4e8b
             ];
         })->toArray();
 
@@ -1401,6 +1744,348 @@ class PersonnaliseController extends Controller
         return response()->json(['success' => true, 'message' => 'Fandom mis à jour avec succès', 'data' => ['fandom' => $fandom]], 200);
     }
 
+<<<<<<< HEAD
+=======
+    public function getAllCategories() {
+        $categories = Category::all();
+        return response()->json($categories);
+    }
+
+
+    // ====================
+    // HASHTAGS
+    // ====================
+
+    public function getTrendingHashtags(Request $request) {
+        $limit = min(50, max(1, (int) $request->get('limit', 10)));
+        $days = max(1, (int) $request->get('days', 7)); // Trending sur les X derniers jours
+
+        // Calculer la date de début
+        $startDate = now()->subDays($days);
+
+        // Récupérer les hashtags les plus utilisés dans les posts récents
+        $trendingTags = \App\Models\Tag::withCount(['posts' => function($query) use ($startDate) {
+                $query->where('posts.content_status', 'published')
+                      ->where('posts.created_at', '>=', $startDate);
+            }])
+            ->having('posts_count', '>', 0)
+            ->orderByDesc('posts_count')
+            ->limit($limit)
+            ->get();
+
+        // Formater les hashtags simplement
+        $formattedTags = $trendingTags->map(function($tag) {
+            return [
+                'id' => $tag->id,
+                'tag_name' => $tag->tag_name,
+                'posts_count' => $tag->posts_count,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'hashtags' => $formattedTags,
+            ]
+        ]);
+    }
+
+    public function getHashtagPosts($hashtagId, Request $request) {
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(100, max(1, (int) $request->get('limit', 10)));
+
+        // Rechercher le tag par ID
+        $tag = \App\Models\Tag::find($hashtagId);
+
+        if (!$tag) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hashtag not found',
+                'data' => [
+                    'posts' => [],
+                    'stats' => [
+                        'totalPosts' => 0,
+                        'growth' => '+0%',
+                        'category' => 'General'
+                    ]
+                ]
+            ], 404);
+        }
+
+        return $this->getPostsByTag($tag, $page, $limit);
+    }
+
+
+
+    private function getPostsByTag($tag, $page, $limit) {
+        // Récupérer les posts associés à ce tag avec pagination
+        $postsQuery = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+                $query->where('tag_id', $tag->id);
+            })
+            ->where('content_status', 'published') // Seulement les posts publiés
+            ->with(['user:id,first_name,last_name,email,profile_image,bio', 'medias', 'tags', 'fandom:id,name'])
+            ->withCount(['favorites', 'comments']) // Compter les likes et commentaires
+            ->orderBy('created_at', 'desc');
+
+        $posts = $postsQuery->paginate($limit, ['*'], 'page', $page);
+
+        // Compter le total de posts pour ce hashtag
+        $totalPosts = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+            $query->where('tag_id', $tag->id);
+        })->where('content_status', 'published')->count();
+
+        // Calculer la croissance (posts du mois dernier vs ce mois)
+        $currentMonth = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+            $query->where('tag_id', $tag->id);
+        })
+        ->where('content_status', 'published')
+        ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
+        ->count();
+
+        $lastMonth = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+            $query->where('tag_id', $tag->id);
+        })
+        ->where('content_status', 'published')
+        ->whereBetween('created_at', [now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth()])
+        ->count();
+
+        $growth = $lastMonth > 0 ? round((($currentMonth - $lastMonth) / $lastMonth) * 100, 1) : 0;
+        $growthText = $growth > 0 ? "+{$growth}%" : "{$growth}%";
+
+        // Déterminer la catégorie la plus fréquente pour ce hashtag
+        $topCategory = \App\Models\Post::whereHas('tags', function($query) use ($tag) {
+            $query->where('tag_id', $tag->id);
+        })
+        ->whereNotNull('subcategory_id')
+        ->with('subcategory.category')
+        ->get()
+        ->groupBy('subcategory.category.name')
+        ->sortByDesc(function($posts) {
+            return $posts->count();
+        })
+        ->keys()
+        ->first() ?? 'General';
+
+        // Formater les posts
+        $formattedPosts = collect($posts->items())->map(function ($post) {
+            $user = $post->user;
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+                'fandom' => $post->fandom ? [
+                    'id' => $post->fandom->id,
+                    'name' => $post->fandom->name,
+                ] : null,
+                'media' => $post->medias ? $post->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'file_type' => $media->file_type,
+                        'file_size' => $media->file_size,
+                    ];
+                })->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'feedback' => $post->feedback ?? 0,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'hashtag' => $tag->tag_name,
+                'tag_id' => $tag->id,
+                'posts' => $formattedPosts,
+                'stats' => [
+                    'totalPosts' => $totalPosts,
+                    'growth' => $growthText,
+                    'category' => $topCategory,
+                    'currentMonth' => $currentMonth,
+                    'lastMonth' => $lastMonth
+                ],
+                'pagination' => [
+                    'page' => $posts->currentPage(),
+                    'per_page' => $posts->perPage(),
+                    'total' => $posts->total(),
+                    'last_page' => $posts->lastPage(),
+                    'has_more' => $posts->hasMorePages(),
+                ]
+            ]
+        ]);
+    }
+
+    // ====================
+    // STORE / E-COMMERCE
+    // ====================
+    public function getStoreCategories() {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'categories' => []
+            ]
+        ]);
+    }
+    public function getStoreBrands() {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'brands' => []
+            ]
+        ]);
+    }
+    public function addToCart(Request $request) {
+        return response()->json([
+            'success' => true,
+            'message' => 'Product added to cart successfully',
+            'data' => [
+                'cartItem' => [
+                    'id' => 1,
+                    'productId' => $request->productId ?? 1,
+                    'quantity' => $request->quantity ?? 1,
+                    'size' => $request->size ?? 'L',
+                    'color' => $request->color ?? 'Black',
+                    'price' => 45.99,
+                    'subtotal' => 45.99
+                ],
+                'cartTotal' => 45.99,
+                'itemsCount' => 1
+            ]
+        ]);
+    }
+    public function addToWishlist($productId) {
+        return response()->json([
+            'success' => true,
+            'message' => 'Product added to wishlist',
+            'data' => [
+                'wishlistId' => 1,
+                'productId' => $productId,
+                'addedAt' => now()->toISOString()
+            ]
+        ]);
+    }
+    public function getCart() {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'items' => [],
+                'summary' => [
+                    'subtotal' => 0,
+                    'shipping' => 0,
+                    'tax' => 0,
+                    'total' => 0,
+                    'itemsCount' => 0
+                ],
+                'estimatedDelivery' => now()->addDays(5)->toDateString()
+            ]
+        ]);
+    }
+    public function updateCartItem($itemId, Request $request) {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'item' => [
+                    'id' => $itemId,
+                    'quantity' => $request->quantity ?? 1,
+                    'subtotal' => 45.99
+                ],
+                'cartTotal' => 45.99
+            ]
+        ]);
+    }
+    public function removeCartItem($itemId) {
+        return response()->json([
+            'success' => true,
+            'message' => 'Item removed from cart',
+            'data' => [
+                'removedItemId' => $itemId,
+                'cartTotal' => 0,
+                'itemsCount' => 0
+            ]
+        ]);
+    }
+    public function createOrder(Request $request) {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'order' => [
+                    'id' => 'ORD-2024-001',
+                    'status' => 'processing',
+                    'total' => 45.99,
+                    'estimatedDelivery' => now()->addDays(7)->toDateString(),
+                    'createdAt' => now()->toISOString()
+                ]
+            ]
+        ]);
+    }
+    public function getOrders() {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'orders' => [],
+                'pagination' => [
+                    'page' => 1,
+                    'limit' => 10,
+                    'total' => 0
+                ]
+            ]
+        ]);
+    }
+    public function cancelOrder($orderId, Request $request) {
+        return response()->json([
+            'success' => true,
+            'message' => 'Order cancelled successfully',
+            'data' => [
+                'orderId' => $orderId,
+                'status' => 'cancelled',
+                'refundAmount' => 45.99,
+                'refundEstimate' => '3-5 business days'
+            ]
+        ]);
+    }
+    public function getOrderDetails($orderId) {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'order' => [
+                    'id' => $orderId,
+                    'status' => 'delivered',
+                    'total' => 45.99,
+                    'orderDate' => now()->subDays(5)->toISOString(),
+                    'deliveredDate' => now()->toISOString(),
+                    'trackingNumber' => 'TN123456789',
+                    'estimatedDelivery' => now()->toISOString(),
+                    'items' => []
+                ]
+            ]
+        ]);
+    }
+    public function reviewOrder($orderId, Request $request) {
+        return response()->json([
+            'success' => true,
+            'message' => 'Review submitted successfully',
+            'data' => [
+                'reviewId' => 1,
+                'rating' => $request->rating ?? 5,
+                'submittedAt' => now()->toISOString()
+            ]
+        ]);
+    }
+
+>>>>>>> eb7643fc1880c519cee613c255268d196bfc4e8b
     /**
      * Supprimer un fandom (admin seulement)
      * Route: DELETE /api/Y/fandoms/{id}
@@ -1425,4 +2110,1105 @@ class PersonnaliseController extends Controller
         // Si le chemin commence par 'storage/' ou '/' on construit l'URL complète
         return url($path);
     }
+<<<<<<< HEAD
+=======
+
+    /**
+     * Obtenir la liste des produits du store
+     * Route: GET /api/store/products
+     */
+    public function getStoreProducts(Request $request)
+    {
+        // Exemple: retourne tous les produits
+        $products = Product::all();
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'products' => $products
+            ]
+        ]);
+    }
+
+    /**
+     * Sauvegarder un post
+     * Route: POST /api/posts/{postId}/save
+     */
+    public function savePost(Request $request)
+    {
+        $request->validate([
+            'post_id' => 'required|exists:posts,id',
+        ]);
+
+        $user = $request->user();
+        $postId = $request->post_id;
+
+        // Vérifier si le post existe
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found',
+            ], 404);
+        }
+
+        // Vérifier si le post est déjà sauvegardé
+        if ($user->hasSavedPost($postId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post is already saved',
+            ], 409);
+        }
+
+        // Sauvegarder le post
+        $user->savedPosts()->attach($postId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Post saved successfully',
+        ]);
+    }
+
+    /**
+     * Retirer un post des sauvegardés
+     * Route: DELETE /api/posts/{postId}/unsave
+     */
+    public function unsavePost(Request $request)
+    {
+        $request->validate([
+            'post_id' => 'required|exists:posts,id',
+        ]);
+
+        $user = $request->user();
+        $postId = $request->post_id;
+
+        // Vérifier si le post existe
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found',
+            ], 404);
+        }
+
+        // Vérifier si le post est sauvegardé
+        if (!$user->hasSavedPost($postId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post is not saved',
+            ], 404);
+        }
+
+        // Retirer le post des sauvegardés
+        $user->savedPosts()->detach($postId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Post unsaved successfully',
+        ]);
+    }
+
+    /**
+     * Basculer l'état de sauvegarde d'un post (sauvegarder ou désauvegarder)
+     * Route: POST /api/posts/{postId}/toggle-save
+     */
+
+    /**
+     * Rechercher des utilisateurs par nom avec pagination
+     * Route: GET /api/search/users
+     */
+    public function searchUsers(Request $request)
+    {
+        $query = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 10);
+
+        // Valider les paramètres
+        if (empty($query)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Search query is required'
+            ], 400);
+        }
+
+        if ($perPage > 50) {
+            $perPage = 50; // Limiter à 50 résultats par page maximum
+        }
+
+        // Recherche dans les utilisateurs par first_name, last_name ou email
+        $users = \App\Models\User::where(function($q) use ($query) {
+                $q->where('first_name', 'LIKE', "%{$query}%")
+                  ->orWhere('last_name', 'LIKE', "%{$query}%")
+                  ->orWhere('email', 'LIKE', "%{$query}%");
+            })
+            ->select('id', 'first_name', 'last_name', 'email', 'profile_image', 'bio', 'created_at')
+            ->orderBy('first_name', 'asc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Formater les données pour inclure le nom complet
+        $formattedUsers = $users->getCollection()->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'full_name' => $user->first_name . ' ' . $user->last_name,
+                'email' => $user->email,
+                'profile_image' => $user->profile_image,
+                'bio' => $user->bio,
+                'created_at' => $user->created_at
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'search_query' => $query,
+                'users' => $formattedUsers,
+                'pagination' => [
+                    'current_page' => $users->currentPage(),
+                    'total_pages' => $users->lastPage(),
+                    'total_items' => $users->total(),
+                    'per_page' => $users->perPage(),
+                    'has_more' => $users->hasMorePages(),
+                    'from' => $users->firstItem(),
+                    'to' => $users->lastItem()
+                ]
+            ]
+        ], 200);
+    }
+
+    /**
+     * Rechercher des posts par tags, description ou sous-catégorie avec pagination
+     * Route: GET /api/Y/search/posts
+     */
+    public function searchPosts(Request $request)
+    {
+        $query = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 10);
+
+        // Valider les paramètres
+        if (empty($query)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Search query is required'
+            ], 400);
+        }
+
+        if ($perPage > 50) {
+            $perPage = 50; // Limiter à 50 résultats par page maximum
+        }
+
+        // Recherche dans les posts par description, tags ou sous-catégorie
+        $posts = \App\Models\Post::where(function($q) use ($query) {
+                // Recherche dans la description du post
+                $q->where('description', 'LIKE', "%{$query}%")
+                  // Recherche dans les tags associés au post
+                  ->orWhereHas('tags', function($tagQuery) use ($query) {
+                      $tagQuery->where('tag_name', 'LIKE', "%{$query}%");
+                  })
+                  // Recherche dans la sous-catégorie du post
+                  ->orWhereHas('subcategory', function($subQuery) use ($query) {
+                      $subQuery->where('name', 'LIKE', "%{$query}%");
+                  });
+            })
+            ->where('content_status', 'published') // Seulement les posts publiés
+            ->with(['user:id,first_name,last_name,email,profile_image', 'medias', 'tags', 'subcategory:id,name'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Formater les données des posts
+        $formattedPosts = $posts->getCollection()->map(function ($post) {
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at,
+                'user' => $post->user ? [
+                    'id' => $post->user->id,
+                    'first_name' => $post->user->first_name,
+                    'last_name' => $post->user->last_name,
+                    'full_name' => $post->user->first_name . ' ' . $post->user->last_name,
+                    'email' => $post->user->email,
+                    'profile_image' => $post->user->profile_image
+                ] : null,
+                'media' => $post->medias ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'subcategory' => $post->subcategory ? [
+                    'id' => $post->subcategory->id,
+                    'name' => $post->subcategory->name
+                ] : null,
+                'likes_count' => $post->favorites ? $post->favorites()->count() : 0,
+                'comments_count' => $post->comments ? $post->comments()->count() : 0
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'search_query' => $query,
+                'posts' => $formattedPosts,
+                'pagination' => [
+                    'current_page' => $posts->currentPage(),
+                    'total_pages' => $posts->lastPage(),
+                    'total_items' => $posts->total(),
+                    'per_page' => $posts->perPage(),
+                    'has_more' => $posts->hasMorePages(),
+                    'from' => $posts->firstItem(),
+                    'to' => $posts->lastItem()
+                ]
+            ]
+        ], 200);
+    }
+
+    /**
+     * Rechercher des fandoms avec pagination
+     * Route: GET /api/Y/search/fandom
+     */
+    public function searchFandomsPaginated(Request $request)
+    {
+        $query = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 10);
+
+        // Valider les paramètres
+        if (empty($query)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Search query is required'
+            ], 400);
+        }
+
+        if ($perPage > 50) {
+            $perPage = 50; // Limiter à 50 résultats par page maximum
+        }
+
+        $user = Auth::user();
+
+        // Recherche dans les fandoms par nom, description
+        $fandoms = \App\Models\Fandom::where(function($q) use ($query) {
+                $q->where('name', 'LIKE', "%{$query}%")
+                  ->orWhere('description', 'LIKE', "%{$query}%");
+            })
+            ->with(['subcategory:id,name'])
+            ->withCount(['posts', 'members'])
+            ->orderBy('name', 'asc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
+        $userMemberships = [];
+        if ($user) {
+            $fandomIds = $fandoms->pluck('id')->toArray();
+            $memberships = \App\Models\Member::where('user_id', $user->id)
+                ->whereIn('fandom_id', $fandomIds)
+                ->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
+
+        // Formater les données des fandoms
+        $formattedFandoms = $fandoms->getCollection()->map(function ($fandom) use ($userMemberships) {
+            return [
+                'id' => $fandom->id,
+                'name' => $fandom->name,
+                'description' => $fandom->description,
+                'cover_image' => $fandom->cover_image,
+                'logo_image' => $fandom->logo_image,
+                'subcategory_id' => $fandom->subcategory_id,
+                'subcategory' => $fandom->subcategory ? [
+                    'id' => $fandom->subcategory->id,
+                    'name' => $fandom->subcategory->name
+                ] : null,
+                'posts_count' => $fandom->posts_count ?? 0,
+                'members_count' => $fandom->members_count ?? 0,
+                'is_member' => isset($userMemberships[$fandom->id]),
+                'member_role' => $userMemberships[$fandom->id] ?? null,
+                'created_at' => $fandom->created_at
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'search_query' => $query,
+                'fandoms' => $formattedFandoms,
+                'pagination' => [
+                    'current_page' => $fandoms->currentPage(),
+                    'total_pages' => $fandoms->lastPage(),
+                    'total_items' => $fandoms->total(),
+                    'per_page' => $fandoms->perPage(),
+                    'has_more' => $fandoms->hasMorePages(),
+                    'from' => $fandoms->firstItem(),
+                    'to' => $fandoms->lastItem()
+                ]
+            ]
+        ], 200);
+    }
+
+    /**
+     * Récupérer les posts d'une sous-catégorie avec leurs médias
+     * Route: GET /api/Y/subcategories/{subcategory}/content
+     */
+    public function getSubcategoryContent($subcategoryId)
+    {
+        // Récupérer la sous-catégorie avec sa catégorie parent
+        $subcategory = \App\Models\Subcategory::with(['category'])->find($subcategoryId);
+
+        if (!$subcategory) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sous-catégorie introuvable'
+            ], 404);
+        }
+
+        // Récupérer tous les posts associés à cette sous-catégorie avec leurs relations
+        $posts = $subcategory->posts()->with([
+            'user:id,first_name,last_name,profile_image',
+            'tags:id,tag_name',
+            'medias:id,file_path,media_type,mediable_id,mediable_type' // Inclure les médias
+        ])->get();
+
+        // Formatter la réponse
+        $response = [
+            'success' => true,
+            'data' => [
+                'subcategory' => [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'category' => $subcategory->category ? [
+                        'id' => $subcategory->category->id,
+                        'name' => $subcategory->category->name
+                    ] : null,
+                    'created_at' => $subcategory->created_at,
+                    'updated_at' => $subcategory->updated_at
+                ],
+                'posts' => $posts->map(function ($post) {
+                    return [
+                        'id' => $post->id,
+                        'description' => $post->description,
+                        'feedback' => $post->feedback,
+                        'schedule_at' => $post->schedule_at,
+                        'content_status' => $post->content_status,
+                        'media' => $post->media, // Champ media (array)
+                        'user' => $post->user ? [
+                            'id' => $post->user->id,
+                            'first_name' => $post->user->first_name,
+                            'last_name' => $post->user->last_name,
+                            'profile_image' => $post->user->profile_image
+                        ] : null,
+                        'tags' => $post->tags->pluck('tag_name')->toArray(), // Tableau simple des noms
+                        'medias' => $post->medias->map(function ($media) {
+                            return [
+                                'id' => $media->id,
+                                'file_path' => $media->file_path,
+                                'media_type' => $media->media_type
+                            ];
+                        }), // Médias polymorphes
+                         'likes_count' => method_exists($post, 'favorites') ? $post->favorites()->count() : 0,
+                         'comments_count' => method_exists($post, 'comments') ? $post->comments()->count() : 0,
+                        'created_at' => $post->created_at,
+                        'updated_at' => $post->updated_at
+                    ];
+                }),
+                'posts_count' => $posts->count()
+            ]
+        ];
+
+        return response()->json($response, 200);
+    }
+
+    /**
+     * Récupérer les fandoms d'une sous-catégorie
+     * Route: GET /api/Y/subcategories/{subcategory_id}/fandoms
+     */
+    public function getSubcategoryFandoms($subcategoryId)
+    {
+        // Récupérer la sous-catégorie avec sa catégorie parent
+        $subcategory = \App\Models\SubCategory::with(['category'])->find($subcategoryId);
+
+        if (!$subcategory) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sous-catégorie introuvable'
+            ], 404);
+        }
+
+        // Récupérer tous les fandoms associés à cette sous-catégorie avec le nombre de membres et de posts
+        $fandoms = \App\Models\Fandom::where('subcategory_id', $subcategoryId)
+            ->withCount(['members', 'posts'])
+            ->get();
+
+        // Formater les fandoms
+        $formattedFandoms = $fandoms->map(function ($fandom) {
+            // Récupérer toutes les données de la table fandom
+            $fandomData = $fandom->toArray();
+
+            // Ajouter les compteurs
+            $fandomData['members_count'] = $fandom->members_count ?? 0;
+            $fandomData['posts_count'] = $fandom->posts_count ?? 0;
+
+            return $fandomData;
+        });
+
+        // Formatter la réponse
+        $response = [
+            'success' => true,
+            'data' => [
+                'subcategory' => [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'description' => $subcategory->description,
+                    'category' => $subcategory->category ? [
+                        'id' => $subcategory->category->id,
+                        'name' => $subcategory->category->name
+                    ] : null
+                ],
+                'fandoms' => $formattedFandoms,
+                'fandoms_count' => $fandoms->count()
+            ]
+        ];
+
+        return response()->json($response, 200);
+    }
+
+    /**
+     * Récupérer les posts trending basés sur le nombre de likes et commentaires
+     * Route: GET /api/Y/posts/trending/top
+     */
+    public function getTrendingPosts(Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = $request->get('limit', 20);
+        $days = max(1, (int) $request->get('days', 7)); // Trending sur les X derniers jours
+
+        // Calculer la date de début
+        $startDate = now()->subDays($days);
+
+        // Récupérer les posts avec le count des favorites et commentaires
+        $trendingPosts = \App\Models\Post::with(['user', 'medias', 'tags'])
+            ->where('content_status', 'published')
+            ->where('created_at', '>=', $startDate)
+            ->withCount(['favorites', 'comments'])
+            ->orderBy('favorites_count', 'desc')
+            ->orderBy('comments_count', 'desc')
+            ->take($limit)
+            ->get();
+
+        // Formater les posts EXACTEMENT comme getHomeFeed
+        $formattedPosts = $trendingPosts->map(function ($post) {
+            // Récupérer toutes les données du post
+            $postData = $post->toArray();
+
+            // Ajouter les compteurs
+            $postData['comments_count'] = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+
+            // Ajouter les médias
+            $postData['media'] = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
+
+            // Ajouter les tags
+            $postData['tags'] = method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [];
+
+            // Supprimer le champ medias (garder seulement media)
+            unset($postData['medias']);
+
+            // Formater l'utilisateur
+            if (isset($postData['user']) && is_array($postData['user'])) {
+                // Supprimer les champs sensibles de l'utilisateur
+                unset($postData['user']['password']);
+                unset($postData['user']['email_verified_at']);
+                unset($postData['user']['remember_token']);
+            }
+
+            return $postData;
+        });
+
+        // Même structure de réponse que getHomeFeed
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts->values(),
+                'pagination' => [
+                    'page' => 1,
+                    'limit' => $limit,
+                    'hasNext' => false
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer les commentaires d'un post avec les informations des utilisateurs
+     * Route: GET /api/Y/posts/{postId}/comments
+     */
+    public function getPostComments($postId, Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Vérifier que le post existe
+        $post = \App\Models\Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found'
+            ], 404);
+        }
+
+        // Récupérer les commentaires avec pagination
+        $comments = \App\Models\Comment::where('post_id', $postId)
+            ->with(['user:id,first_name,last_name,email,profile_image,bio'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les commentaires
+        $formattedComments = collect($comments->items())->map(function ($comment) {
+            $user = $comment->user;
+            return [
+                'id' => $comment->id,
+                'content' => $comment->content,
+                'created_at' => $comment->created_at ? $comment->created_at->toISOString() : null,
+                'updated_at' => $comment->updated_at ? $comment->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'post_id' => $postId,
+                'comments' => $formattedComments,
+                'comments_count' => $comments->total(),
+                'pagination' => [
+                    'current_page' => $comments->currentPage(),
+                    'total_pages' => $comments->lastPage(),
+                    'total_items' => $comments->total(),
+                    'per_page' => $comments->perPage(),
+                    'has_more' => $comments->hasMorePages(),
+                    'from' => $comments->firstItem(),
+                    'to' => $comments->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer le feed des posts des utilisateurs suivis (following)
+     * Route: GET /api/Y/feed/following
+     */
+    public function getFollowingFeed(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized - User must be logged in'
+            ], 401);
+        }
+
+        $page = $request->get('page', 1);
+        $limit = min(50, max(1, (int) $request->get('limit', 20)));
+
+        // Récupérer les IDs des utilisateurs que l'utilisateur actuel suit
+        $followingUserIds = \App\Models\Follow::where('follower_id', $user->id)
+            ->pluck('following_id')
+            ->toArray();
+
+        if (empty($followingUserIds)) {
+            // Si l'utilisateur ne suit personne, retourner un feed vide
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'posts' => [],
+                    'following_count' => 0,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'total_pages' => 0,
+                        'total_items' => 0,
+                        'per_page' => $limit,
+                        'has_more' => false,
+                        'from' => null,
+                        'to' => null
+                    ]
+                ]
+            ]);
+        }
+
+        // Récupérer les posts des utilisateurs suivis avec pagination
+        $posts = \App\Models\Post::whereIn('user_id', $followingUserIds)
+            ->where('content_status', 'published')
+            ->with(['user:id,first_name,last_name,email,profile_image,bio', 'medias', 'tags', 'fandom:id,name'])
+            ->withCount(['favorites', 'comments'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts
+        $formattedPosts = collect($posts->items())->map(function ($post) {
+            $user = $post->user;
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+                'fandom' => $post->fandom ? [
+                    'id' => $post->fandom->id,
+                    'name' => $post->fandom->name,
+                ] : null,
+                'media' => $post->medias ? $post->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'media_type' => $media->media_type,
+                    ];
+                })->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'feedback' => $post->feedback ?? 0,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts,
+                'following_count' => count($followingUserIds),
+                'pagination' => [
+                    'current_page' => $posts->currentPage(),
+                    'total_pages' => $posts->lastPage(),
+                    'total_items' => $posts->total(),
+                    'per_page' => $posts->perPage(),
+                    'has_more' => $posts->hasMorePages(),
+                    'from' => $posts->firstItem(),
+                    'to' => $posts->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer tous les posts d'une catégorie (via toutes ses sous-catégories)
+     * Route: GET /api/Y/categories/{category_id}/posts
+     */
+    public function getCategoryPosts($categoryId, Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Vérifier que la catégorie existe
+        $category = \App\Models\Category::find($categoryId);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        // Récupérer toutes les sous-catégories de cette catégorie
+        $subcategories = \App\Models\SubCategory::where('category_id', $categoryId)->get();
+        $subcategoryIds = $subcategories->pluck('id')->toArray();
+
+        if (empty($subcategoryIds)) {
+            // Si la catégorie n'a pas de sous-catégories, retourner un résultat vide
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'category' => [
+                        'id' => $category->id,
+                        'name' => $category->name,
+                        'description' => $category->description,
+                    ],
+                    'subcategories' => [],
+                    'posts' => [],
+                    'posts_count' => 0,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'total_pages' => 0,
+                        'total_items' => 0,
+                        'per_page' => $limit,
+                        'has_more' => false,
+                        'from' => null,
+                        'to' => null
+                    ]
+                ]
+            ]);
+        }
+
+        // Récupérer les posts de toutes les sous-catégories avec pagination
+        $posts = \App\Models\Post::whereIn('subcategory_id', $subcategoryIds)
+            ->where('content_status', 'published')
+            ->with([
+                'user:id,first_name,last_name,email,profile_image,bio',
+                'medias',
+                'tags',
+                'subcategory:id,name,category_id',
+                'fandom:id,name'
+            ])
+            ->withCount(['favorites', 'comments'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts
+        $formattedPosts = collect($posts->items())->map(function ($post) {
+            $user = $post->user;
+            $subcategory = $post->subcategory;
+
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+                'subcategory' => $subcategory ? [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'category_id' => $subcategory->category_id,
+                ] : null,
+                'fandom' => $post->fandom ? [
+                    'id' => $post->fandom->id,
+                    'name' => $post->fandom->name,
+                ] : null,
+                'media' => $post->medias ? $post->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'media_type' => $media->media_type,
+                    ];
+                })->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'feedback' => $post->feedback ?? 0,
+            ];
+        });
+
+        // Formater les sous-catégories pour la réponse
+        $formattedSubcategories = $subcategories->map(function ($subcategory) {
+            return [
+                'id' => $subcategory->id,
+                'name' => $subcategory->name,
+                'description' => $subcategory->description,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'category' => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'description' => $category->description,
+                ],
+                'subcategories' => $formattedSubcategories,
+                'posts' => $formattedPosts,
+                'posts_count' => $posts->total(),
+                'pagination' => [
+                    'current_page' => $posts->currentPage(),
+                    'total_pages' => $posts->lastPage(),
+                    'total_items' => $posts->total(),
+                    'per_page' => $posts->perPage(),
+                    'has_more' => $posts->hasMorePages(),
+                    'from' => $posts->firstItem(),
+                    'to' => $posts->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer tous les fandoms d'une catégorie (via toutes ses sous-catégories)
+     * Route: GET /api/Y/categories/{category_id}/fandoms
+     */
+    public function getCategoryFandoms($categoryId, Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Vérifier que la catégorie existe
+        $category = \App\Models\Category::find($categoryId);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        // Récupérer toutes les sous-catégories de cette catégorie
+        $subcategories = \App\Models\SubCategory::where('category_id', $categoryId)->get();
+        $subcategoryIds = $subcategories->pluck('id')->toArray();
+
+        if (empty($subcategoryIds)) {
+            // Si la catégorie n'a pas de sous-catégories, retourner un résultat vide
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'category' => [
+                        'id' => $category->id,
+                        'name' => $category->name,
+                        'description' => $category->description,
+                    ],
+                    'subcategories' => [],
+                    'fandoms' => [],
+                    'fandoms_count' => 0,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'total_pages' => 0,
+                        'total_items' => 0,
+                        'per_page' => $limit,
+                        'has_more' => false,
+                        'from' => null,
+                        'to' => null
+                    ]
+                ]
+            ]);
+        }
+
+        // Récupérer les fandoms de toutes les sous-catégories avec pagination
+        $fandoms = \App\Models\Fandom::whereIn('subcategory_id', $subcategoryIds)
+            ->with([
+                'subcategory:id,name,category_id'
+            ])
+            ->withCount(['members', 'posts'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Obtenir les rôles de l'utilisateur authentifié pour tous les fandoms s'il est connecté
+        $user = Auth::user();
+        $userMemberships = [];
+        if ($user) {
+            $fandomIds = collect($fandoms->items())->pluck('id')->toArray();
+            $memberships = \App\Models\Member::where('user_id', $user->id)
+                ->whereIn('fandom_id', $fandomIds)
+                ->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
+
+        // Formater les fandoms
+        $formattedFandoms = collect($fandoms->items())->map(function ($fandom) use ($userMemberships) {
+            $subcategory = $fandom->subcategory;
+
+            return [
+                'id' => $fandom->id,
+                'name' => $fandom->name,
+                'description' => $fandom->description,
+                'cover_image' => $fandom->cover_image,
+                'logo_image' => $fandom->logo_image,
+                'created_at' => $fandom->created_at ? $fandom->created_at->toISOString() : null,
+                'updated_at' => $fandom->updated_at ? $fandom->updated_at->toISOString() : null,
+                'subcategory' => $subcategory ? [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'category_id' => $subcategory->category_id,
+                ] : null,
+                'members_count' => $fandom->members_count ?? 0,
+                'posts_count' => $fandom->posts_count ?? 0,
+                'is_member' => isset($userMemberships[$fandom->id]),
+                'member_role' => $userMemberships[$fandom->id] ?? null,
+            ];
+        });
+
+        // Formater les sous-catégories pour la réponse
+        $formattedSubcategories = $subcategories->map(function ($subcategory) {
+            return [
+                'id' => $subcategory->id,
+                'name' => $subcategory->name,
+                'description' => $subcategory->description,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'category' => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'description' => $category->description,
+                ],
+                'subcategories' => $formattedSubcategories,
+                'fandoms' => $formattedFandoms,
+                'fandoms_count' => $fandoms->total(),
+                'pagination' => [
+                    'current_page' => $fandoms->currentPage(),
+                    'total_pages' => $fandoms->lastPage(),
+                    'total_items' => $fandoms->total(),
+                    'per_page' => $fandoms->perPage(),
+                    'has_more' => $fandoms->hasMorePages(),
+                    'from' => $fandoms->firstItem(),
+                    'to' => $fandoms->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer tous les posts favoris de l'utilisateur authentifié
+     * Route: GET /api/Y/favorites/posts
+     */
+    public function getFavoritePosts(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(100, max(1, (int) $request->get('limit', 10)));
+
+        // Récupérer les favoris de type Post avec pagination
+        $favorites = Favorite::where('user_id', $user->id)
+            ->where('favoriteable_type', 'App\\Models\\Post')
+            ->with(['favoriteable.user', 'favoriteable.medias', 'favoriteable.tags'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts favoris
+        $formattedPosts = collect($favorites->items())->map(function ($favorite) {
+            $post = $favorite->favoriteable;
+            if (!$post) return null; // Post supprimé
+
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'category_id' => $post->category_id ?? null,
+                'subcategory_id' => $post->subcategory_id ?? null,
+                'fandom_id' => $post->fandom_id ?? null,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'favorited_at' => $favorite->created_at ? $favorite->created_at->toISOString() : null,
+                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                'user' => $post->user ? [
+                    'id' => $post->user->id,
+                    'first_name' => $post->user->first_name,
+                    'last_name' => $post->user->last_name,
+                    'profile_image' => $post->user->profile_image,
+                ] : null,
+                'likes_count' => method_exists($post, 'favorites') ? $post->favorites()->count() : 0,
+                'comments_count' => method_exists($post, 'comments') ? $post->comments()->count() : 0,
+            ];
+        })->filter(); // Supprimer les posts null
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts->values(),
+                'pagination' => [
+                    'current_page' => $favorites->currentPage(),
+                    'total_pages' => $favorites->lastPage(),
+                    'total_items' => $favorites->total(),
+                    'per_page' => $favorites->perPage(),
+                    'has_more' => $favorites->hasMorePages(),
+                    'from' => $favorites->firstItem(),
+                    'to' => $favorites->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer tous les produits favoris de l'utilisateur authentifié
+     * Route: GET /api/Y/favorites/products
+     */
+    public function getFavoriteProducts(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(100, max(1, (int) $request->get('limit', 10)));
+
+        // Récupérer les favoris de type Product avec pagination
+        $favorites = Favorite::where('user_id', $user->id)
+            ->where('favoriteable_type', 'App\\Models\\Product')
+            ->with(['favoriteable'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les produits favoris
+        $formattedProducts = collect($favorites->items())->map(function ($favorite) {
+            $product = $favorite->favoriteable;
+            if (!$product) return null; // Produit supprimé
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'description' => $product->description,
+                'price' => $product->price,
+                'image' => $product->image,
+                'category_id' => $product->category_id ?? null,
+                'subcategory_id' => $product->subcategory_id ?? null,
+                'stock_quantity' => $product->stock_quantity ?? 0,
+                'created_at' => $product->created_at ? $product->created_at->toISOString() : null,
+                'updated_at' => $product->updated_at ? $product->updated_at->toISOString() : null,
+                'favorited_at' => $favorite->created_at ? $favorite->created_at->toISOString() : null,
+                'rating_average' => method_exists($product, 'ratings') ? round($product->ratings()->avg('evaluation') ?? 0, 2) : 0,
+                'rating_count' => method_exists($product, 'ratings') ? $product->ratings()->count() : 0,
+            ];
+        })->filter(); // Supprimer les produits null
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'products' => $formattedProducts->values(),
+                'pagination' => [
+                    'current_page' => $favorites->currentPage(),
+                    'total_pages' => $favorites->lastPage(),
+                    'total_items' => $favorites->total(),
+                    'per_page' => $favorites->perPage(),
+                    'has_more' => $favorites->hasMorePages(),
+                    'from' => $favorites->firstItem(),
+                    'to' => $favorites->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Récupérer tous les favoris de l'utilisateur authentifié (posts et produits)
+     * Route: GET /api/Y/favorites
+     */
+
+
+>>>>>>> eb7643fc1880c519cee613c255268d196bfc4e8b
 }
