@@ -68,8 +68,6 @@ Route::get('/users/{userId}/favorites', [\App\Http\Controllers\FavoriteControlle
 Route::get('/users/{userId}/favorites/{type}', [\App\Http\Controllers\FavoriteController::class, 'getUserFavoritesByType']);
 Route::get('/favorites/{type}/{id}/users', [\App\Http\Controllers\FavoriteController::class, 'getItemFavoriteUsers']);
 
-Route::post('/ratings', [\App\Http\Controllers\RatingController::class, 'addOrUpdateRating']);
-Route::delete('/ratings', [\App\Http\Controllers\RatingController::class, 'deleteRating']);
 Route::get('/ratings/{type}/{id}', [\App\Http\Controllers\RatingController::class, 'getItemRatings']);
 Route::get('/ratings/{type}/{id}/statistics', [\App\Http\Controllers\RatingController::class, 'getItemRatingStatistics']);
 Route::get('/users/{userId}/ratings', [\App\Http\Controllers\RatingController::class, 'getUserRatings']);
@@ -228,6 +226,11 @@ Route::get('products/{product}', [ProductController::class, 'show']);
 Route::post('products', [ProductController::class, 'store']);
 Route::put('products/{product}', [ProductController::class, 'update']);
 Route::delete('products/{product}', [ProductController::class, 'destroy']);
+
+
+
+Route::post('/ratings', [\App\Http\Controllers\RatingController::class, 'addOrUpdateRating']);
+Route::delete('/ratings', [\App\Http\Controllers\RatingController::class, 'deleteRating']);
 
 // 🛒 COMMANDES
 Route::get('/orders', [OrderController::class, 'index']);

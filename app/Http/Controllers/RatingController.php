@@ -7,6 +7,7 @@ use App\Models\Post;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class RatingController extends Controller
 {
@@ -17,29 +18,38 @@ class RatingController extends Controller
     public function addOrUpdateRating(Request $request)
     {
         $request->validate([
-            'user_id' => 'required|integer|exists:users,id',
             'rateable_id' => 'required|integer',
-            'rateable_type' => 'required|string|in:post,product',
+            'rateable_type' => 'nullable|string|in:post,product',
             'evaluation' => 'required|integer|min:0|max:5',
             'commentaire' => 'nullable|string|max:1000',
         ]);
 
-        // Convertir le type en nom de classe complet
-        $modelClass = $request->rateable_type === 'post' ? Post::class : Product::class;
+        // Récupérer l'utilisateur authentifié
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'error' => 'User not authenticated'
+            ], 401);
+        }
+
+        // Définir le type par défaut comme Product et convertir en nom de classe complet
+        $rateableType = $request->rateable_type ?? 'product';
+        $modelClass = $rateableType === 'post' ? Post::class : Product::class;
 
         // Vérifier que l'élément existe
         $item = $modelClass::find($request->rateable_id);
         if (!$item) {
             return response()->json([
                 'success' => false,
-                'error' => ucfirst($request->rateable_type) . ' not found'
+                'error' => ucfirst($rateableType) . ' not found'
             ], 404);
         }
 
         // Rechercher ou créer le rating
         $rating = Rating::updateOrCreate(
             [
-                'user_id' => $request->user_id,
+                'user_id' => $user->id,
                 'rateable_id' => $request->rateable_id,
                 'rateable_type' => $modelClass,
             ],
@@ -78,15 +88,25 @@ class RatingController extends Controller
     public function deleteRating(Request $request)
     {
         $request->validate([
-            'user_id' => 'required|integer|exists:users,id',
             'rateable_id' => 'required|integer',
-            'rateable_type' => 'required|string|in:post,product',
+            'rateable_type' => 'nullable|string|in:post,product',
         ]);
 
-        $modelClass = $request->rateable_type === 'post' ? Post::class : Product::class;
+        // Récupérer l'utilisateur authentifié
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'error' => 'User not authenticated'
+            ], 401);
+        }
+
+        // Définir le type par défaut comme Product
+        $rateableType = $request->rateable_type ?? 'product';
+        $modelClass = $rateableType === 'post' ? Post::class : Product::class;
 
         $rating = Rating::where([
-            'user_id' => $request->user_id,
+            'user_id' => $user->id,
             'rateable_id' => $request->rateable_id,
             'rateable_type' => $modelClass,
         ])->first();
