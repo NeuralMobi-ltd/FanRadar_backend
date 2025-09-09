@@ -43,21 +43,20 @@
 <body>
     <div class="container">
         <h1>🔐 Code de Vérification OTP</h1>
-        
+
         <p>Bonjour,</p>
-        
-        <p>Vous avez demandé la réinitialisation de votre mot de passe sur <strong>FanRadar</strong>.</p>
-        
+
+
         <p>Voici votre code OTP :</p>
-        
+
         <div class="otp-code">{{ $otp }}</div>
-        
+
         <p>Ce code est valide pendant <strong>10 minutes</strong>.</p>
-        
+
         <div class="warning">
             ⚠️ <strong>Important :</strong> Si vous n'avez pas demandé cette réinitialisation, ignorez cet email. Votre mot de passe restera inchangé.
         </div>
-        
+
         <p>Merci,<br>L'équipe FanRadar</p>
     </div>
 </body>
