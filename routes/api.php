@@ -179,6 +179,8 @@ Route::get('Y/fandoms', [PersonnaliseController::class, 'getFandoms']);
 // Search fandoms by query: /api/fandoms/search?q=QUERY
 Route::get('Y/fandoms/search', [PersonnaliseController::class, 'searchFandoms']);
 
+// Get fandoms by category: /api/categories/{category_id}/fandoms
+Route::get('Y/categories/{category_id}/fandoms', [PersonnaliseController::class, 'getFandomsByCategory']);
 
 // Get posts for a fandom
 Route::get('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'getFandomPosts']);

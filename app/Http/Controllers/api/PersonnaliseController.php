@@ -1350,6 +1350,89 @@ class PersonnaliseController extends Controller
         ]);
     }
 
+    /**
+     * Récupérer les fandoms d'une catégorie
+     * Route: GET /api/Y/categories/{category_id}/fandoms
+     */
+    public function getFandomsByCategory($category_id, Request $request)
+    {
+        // Vérifier que la catégorie existe
+        $category = Category::find($category_id);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        $user = Auth::user();
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(50, max(1, (int) $request->get('limit', 10)));
+
+        // Récupérer les subcategories de cette catégorie
+        $subcategoryIds = \App\Models\SubCategory::where('category_id', $category_id)->pluck('id');
+
+        // Récupérer les fandoms liés à ces subcategories avec pagination
+        $fandomsQuery = \App\Models\Fandom::with('subcategory')
+            ->withCount(['posts', 'members'])
+            ->whereIn('subcategory_id', $subcategoryIds)
+            ->orderBy('members_count', 'desc'); // Trier par popularité
+
+        $fandoms = $fandomsQuery->paginate($limit, ['*'], 'page', $page);
+
+        // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
+        $userMemberships = [];
+        if ($user) {
+            $fandomIds = $fandoms->pluck('id');
+            $memberships = \App\Models\Member::where('user_id', $user->id)
+                ->whereIn('fandom_id', $fandomIds)
+                ->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
+
+        // Formater les données des fandoms
+        $formattedFandoms = $fandoms->getCollection()->map(function ($fandom) use ($userMemberships) {
+            $attrs = $fandom->toArray();
+            $attrs['posts_count'] = $fandom->posts_count ?? 0;
+            $attrs['members_count'] = $fandom->members_count ?? 0;
+
+            // Ajouter les informations de membership
+            $attrs['is_member'] = isset($userMemberships[$fandom->id]);
+            $attrs['member_role'] = $userMemberships[$fandom->id] ?? null;
+
+            // Simplifier les informations de subcategory
+            if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
+                $attrs['subcategory'] = [
+                    'id' => $attrs['subcategory']['id'],
+                    'name' => $attrs['subcategory']['name'],
+                ];
+            }
+
+            return $attrs;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'category' => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'description' => $category->description,
+                ],
+                'fandoms' => $formattedFandoms,
+                'pagination' => [
+                    'current_page' => $fandoms->currentPage(),
+                    'last_page' => $fandoms->lastPage(),
+                    'per_page' => $fandoms->perPage(),
+                    'total' => $fandoms->total(),
+                    'has_more' => $fandoms->hasMorePages(),
+                ]
+            ]
+        ]);
+    }
+
      /**
      * Récupérer tous les fandoms
      * Route: GET /api/fandoms
