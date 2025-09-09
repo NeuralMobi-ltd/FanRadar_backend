@@ -2992,6 +2992,150 @@ class PersonnaliseController extends Controller
     }
 
     /**
+     * Obtenir les produits drag (édition limitée)
+     * Route: GET /api/Y/products/drag
+     */
+    public function getDragProducts(Request $request)
+    {
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(50, max(1, (int) $request->get('limit', 10)));
+        $status = $request->get('status'); // 'upcoming', 'active', 'expired', 'all'
+
+        $now = now();
+        $query = Product::with(['medias', 'tags', 'subcategory', 'ratings'])
+            ->whereNotNull('sale_start_date')
+            ->whereNotNull('sale_end_date')
+            ->where('content_status', 'published');
+
+        // Filtrer par statut si spécifié
+        switch ($status) {
+            case 'upcoming':
+                // Produits qui n'ont pas encore commencé leur vente
+                $query->where('sale_start_date', '>', $now);
+                break;
+            case 'active':
+                // Produits en vente actuellement
+                $query->where('sale_start_date', '<=', $now)
+                      ->where('sale_end_date', '>=', $now);
+                break;
+            case 'expired':
+                // Produits dont la vente est terminée
+                $query->where('sale_end_date', '<', $now);
+                break;
+            case 'all':
+            default:
+                // Tous les produits drag
+                break;
+        }
+
+        // Trier par urgence (produits se terminant bientôt en premier)
+        $query->orderByRaw('
+            CASE
+                WHEN sale_end_date < NOW() THEN 3
+                WHEN sale_start_date > NOW() THEN 2
+                ELSE 1
+            END
+        ')
+        ->orderBy('sale_end_date', 'asc');
+
+        $products = $query->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les données des produits
+        $formattedProducts = $products->getCollection()->map(function ($product) use ($now) {
+            // Calculer le statut du produit
+            $status = 'expired';
+            $timeRemaining = null;
+            $daysUntilStart = null;
+
+            if ($product->sale_start_date > $now) {
+                $status = 'upcoming';
+                $daysUntilStart = $now->diffInDays($product->sale_start_date);
+            } elseif ($product->sale_start_date <= $now && $product->sale_end_date >= $now) {
+                $status = 'active';
+                $timeRemaining = $now->diffInDays($product->sale_end_date);
+            }
+
+            // Calculer le pourcentage de stock restant
+            $stockPercentage = $product->stock > 0 ? min(100, ($product->stock / 1000) * 100) : 0;
+
+            // Calculer la note moyenne
+            $averageRating = $product->ratings->count() > 0 ? round($product->ratings->avg('evaluation'), 1) : 0;
+
+            return [
+                'id' => $product->id,
+                'product_name' => $product->product_name,
+                'description' => $product->description,
+                'price' => (float) $product->price,
+                'original_price' => $product->promotion ? (float) ($product->price / (1 - $product->promotion / 100)) : (float) $product->price,
+                'promotion' => $product->promotion,
+                'stock' => $product->stock,
+                'stock_percentage' => $stockPercentage,
+                'sale_start_date' => $product->sale_start_date ? $product->sale_start_date->toISOString() : null,
+                'sale_end_date' => $product->sale_end_date ? $product->sale_end_date->toISOString() : null,
+                'status' => $status,
+                'time_remaining_days' => $timeRemaining,
+                'days_until_start' => $daysUntilStart,
+                'is_limited' => true,
+                'urgency_level' => $timeRemaining !== null && $timeRemaining <= 3 ? 'high' : ($timeRemaining <= 7 ? 'medium' : 'low'),
+                'subcategory' => $product->subcategory ? [
+                    'id' => $product->subcategory->id,
+                    'name' => $product->subcategory->name,
+                ] : null,
+                'media' => $product->medias ? $product->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'media_type' => $media->media_type,
+                    ];
+                })->toArray() : [],
+                'tags' => $product->tags ? $product->tags->pluck('tag_name')->toArray() : [],
+                'average_rating' => $averageRating,
+                'ratings_count' => $product->ratings->count(),
+                'favorites_count' => $product->favorites()->count(),
+                'created_at' => $product->created_at ? $product->created_at->toISOString() : null,
+            ];
+        });
+
+        // Statistiques générales
+        $totalDragProducts = Product::whereNotNull('sale_start_date')
+            ->whereNotNull('sale_end_date')
+            ->where('content_status', 'published')
+            ->count();
+
+        $activeDragProducts = Product::whereNotNull('sale_start_date')
+            ->whereNotNull('sale_end_date')
+            ->where('content_status', 'published')
+            ->where('sale_start_date', '<=', $now)
+            ->where('sale_end_date', '>=', $now)
+            ->count();
+
+        $upcomingDragProducts = Product::whereNotNull('sale_start_date')
+            ->where('content_status', 'published')
+            ->where('sale_start_date', '>', $now)
+            ->count();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'products' => $formattedProducts,
+                'statistics' => [
+                    'total_drag_products' => $totalDragProducts,
+                    'active_products' => $activeDragProducts,
+                    'upcoming_products' => $upcomingDragProducts,
+                    'expired_products' => $totalDragProducts - $activeDragProducts - $upcomingDragProducts,
+                ],
+                'pagination' => [
+                    'current_page' => $products->currentPage(),
+                    'last_page' => $products->lastPage(),
+                    'per_page' => $products->perPage(),
+                    'total' => $products->total(),
+                    'has_more' => $products->hasMorePages(),
+                ]
+            ]
+        ]);
+    }
+
+    /**
      * Sauvegarder un post
      * Route: POST /api/posts/{postId}/save
      */

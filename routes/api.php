@@ -187,7 +187,6 @@ Route::get('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'getFa
 // Get members (users) for a fandom
 Route::get('Y/fandoms/{fandom_id}/members', [PersonnaliseController::class, 'getFandomMembers']);
 
-Route::get('Y/categories/{category_id}/subcategories', [PersonnaliseController::class, 'getCategorySubcategories']);
 
 
 // Search users by name with pagination
@@ -223,7 +222,8 @@ Route::get('Y/myfavorites/products', [PersonnaliseController::class, 'getFavorit
 Route::get('products', [ProductController::class, 'index']);
 Route::get('products/{product}', [ProductController::class, 'show']);
 
-
+// Get limited edition products (drag products)
+Route::get('Y/products/drag', [PersonnaliseController::class, 'getDragProducts']);
 
 Route::post('products', [ProductController::class, 'store']);
 Route::put('products/{product}', [ProductController::class, 'update']);
@@ -253,6 +253,8 @@ Route::post('admin/users', [\App\Http\Controllers\Api\M_Controller::class, 'addU
 Route::put('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateUser']);
 Route::delete('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteUser']);
 });
+
+Route::get('Y/categories/{category_id}/subcategories', [PersonnaliseController::class, 'getCategorySubcategories']);
 Route::get('Y/categories', [PersonnaliseController::class, 'getAllCategories']);
 
 
