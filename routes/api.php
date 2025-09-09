@@ -170,7 +170,7 @@ Route::get('Y/feed/home', [PersonnaliseController::class, 'getHomeFeed']);
 Route::get('Y/feed/explore', [PersonnaliseController::class, 'getExploreFeed']);
 
 
-Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']);
+//Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']);
 //Route::get('/categories/{category}/content', [PersonnaliseController::class, 'getCategoryContent']);
 
 //Route::get('/store/products', [PersonnaliseController::class, 'getStoreProducts']);
