@@ -3,12 +3,15 @@
 use App\Http\Controllers\Api\AuthentificationController;
 use App\Http\Controllers\Api\PersonnaliseController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\FandomController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderProductController;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\TagController;
+use App\Http\Controllers\TagsController;
+use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -91,123 +94,120 @@ Route::get('/users/{userId}/mutual-followers', [\App\Http\Controllers\FollowCont
 // ====================
 // AUTHENTICATION PERSONNALISÉ
 // ====================
-Route::post('Y/auth/login', [PersonnaliseController::class, 'login']);
-Route::post('/Y/auth/register', [PersonnaliseController::class, 'register']);
+Route::post('Y/auth/login', [AuthentificationController::class, 'loginUser']);
+Route::post('/Y/auth/register', [AuthentificationController::class, 'registerUser']);
 //otp
-Route::post('/forgetPassword', [PersonnaliseController::class, 'forgetPassword']);
-Route::post('/resetPassword', [PersonnaliseController::class, 'resetPassword']);
+Route::post('/forgetPassword', [AuthentificationController::class, 'forgetPassword']);
+Route::post('/resetPassword', [AuthentificationController::class, 'resetPassword']);
 
-Route::post('/verifyregister', [PersonnaliseController::class, 'verifyregister']);
+Route::post('/verifyregister', [AuthentificationController::class, 'verifyregister']);
 
-Route::post('/verifyOTPforgetPassword', [PersonnaliseController::class, 'verifyOTPforgetPassword']);
+Route::post('/verifyOTPforgetPassword', [AuthentificationController::class, 'verifyOTPforgetPassword']);
 
 
 // ====================
 // USER PROFILE
 // ====================
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('Y/users/profile', [PersonnaliseController::class, 'getUserProfile']);
-    Route::post('Y/users/profile', [PersonnaliseController::class, 'updateUserProfile']);
-});
+    Route::get('Y/users/profile', [UserController::class, 'getUserProfile']);
+    Route::post('Y/users/profile', [UserController::class, 'updateUserProfile']);
 
 
-Route::middleware('auth:sanctum')->group(function () {
-
-    Route::get('Y/users/{userId}/posts', [PersonnaliseController::class, 'getUserPosts']);
-    Route::get('Y/users/{userId}/profile', [PersonnaliseController::class, 'getUserProfileById']);
+    Route::get('Y/users/{userId}/posts', [PostController::class, 'getUserPosts']);
+    Route::get('Y/users/{userId}/profile', [UserController::class, 'getUserProfileById']);
 
 
 
-    Route::post('Y/posts/create', [PersonnaliseController::class, 'createPost']);
-    Route::post('Y/posts/{postId}/update', [PersonnaliseController::class, 'updatePost']);
-    Route::delete('Y/posts/{postId}/delete', [PersonnaliseController::class, 'deletePost']);
+    Route::post('Y/posts/create', [PostController::class, 'createPost']);
+    Route::post('Y/posts/{postId}/update', [PostController::class, 'updatePost']);
+    Route::delete('Y/posts/{postId}/delete', [PostController::class, 'deletePost']);
 
-    Route::post('Y/users/{userId}/follow', [PersonnaliseController::class, 'followUser']);
-    Route::delete('Y/users/{userId}/unfollow', [PersonnaliseController::class, 'unfollowUser']);
+    Route::post('Y/users/{userId}/follow', [UserController::class, 'followUser']);
+    Route::delete('Y/users/{userId}/unfollow', [UserController::class, 'unfollowUser']);
 
 
+    Route::post('Y/posts/{postId}/comments', [PostController::class, 'addCommentToPost']);
 
-    Route::post('Y/posts/{postId}/comments', [PersonnaliseController::class, 'addCommentToPost']);
-
-    Route::get('Y/fandoms/{fandom_id}', [PersonnaliseController::class, 'getfandombyId']);
+    Route::get('Y/fandoms/{fandom_id}', [FandomController::class, 'getfandombyId']);
 
     // Allow authenticated user to join a fandom by id
-    Route::post('Y/fandoms/{fandom_id}/join', [PersonnaliseController::class, 'joinFandom']);
+    Route::post('Y/fandoms/{fandom_id}/join', [FandomController::class, 'joinFandom']);
 
     // Allow authenticated user to leave a fandom by id
-    Route::delete('Y/fandoms/{fandom_id}/leave', [PersonnaliseController::class, 'leaveFandom']);
+    Route::delete('Y/fandoms/{fandom_id}/leave', [FandomController::class, 'leaveFandom']);
 
 
 
-    Route::post('Y/fandoms', [PersonnaliseController::class, 'createFandom']);
+    Route::post('Y/fandoms', [FandomController::class, 'createFandom']);
     // Update an existing fandom by id
-    Route::post('Y/fandoms/{fandom_id}', [PersonnaliseController::class, 'updateFandom']);
+    Route::post('Y/fandoms/{fandom_id}', [FandomController::class, 'updateFandom']);
 
-    Route::post('Y/posts/save', [\App\Http\Controllers\Api\PersonnaliseController::class, 'savePost']);
-    Route::post('Y/posts/unsave', [\App\Http\Controllers\Api\PersonnaliseController::class, 'unsavePost']);
-    Route::get('Y/posts/savedPosts', [\App\Http\Controllers\Api\PersonnaliseController::class, 'getSavedPosts']);
+    Route::post('Y/posts/save', [PostController::class, 'savePost']);
+    Route::post('Y/posts/unsave', [PostController::class, 'unsavePost']);
+    Route::get('Y/posts/savedPosts', [PostController::class, 'getSavedPosts']);
 
-    Route::get('Y/users/my-fandoms', [PersonnaliseController::class, 'getMyFandoms']);
+    Route::get('Y/users/my-fandoms', [FandomController::class, 'getMyFandoms']);
      // Allow admin to change member role in fandom
-    Route::put('Y/fandoms/{fandom_id}/members/{user_id}/role', [PersonnaliseController::class, 'changeMemberRole']);
+    Route::put('Y/fandoms/{fandom_id}/members/{user_id}/role', [FandomController::class, 'changeMemberRole']);
 
     // Allow admin to remove member from fandom
-    Route::delete('Y/fandoms/{fandom_id}/members/{user_id}', [PersonnaliseController::class, 'removeMemberFromFandom']);
+    Route::delete('Y/fandoms/{fandom_id}/members/{user_id}', [FandomController::class, 'removeMemberFromFandom']);
 
     // Allow members to add a post to a fandom
-    Route::post('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'addPostToFandom']);
+    Route::post('Y/fandoms/{fandom_id}/posts', [FandomController::class, 'addPostToFandom']);
 
     // Allow members to update their post in a fandom
-    Route::put('Y/fandoms/{fandom_id}/posts/{post_id}', [PersonnaliseController::class, 'updatePostInFandom']);
+    Route::put('Y/fandoms/{fandom_id}/posts/{post_id}', [FandomController::class, 'updatePostInFandom']);
 
     // Allow members to delete their post in a fandom
-    Route::delete('Y/fandoms/{fandom_id}/posts/{post_id}', [PersonnaliseController::class, 'deletePostInFandom']);
+    Route::delete('Y/fandoms/{fandom_id}/posts/{post_id}', [FandomController::class, 'deletePostInFandom']);
 
-    Route::get('Y/feed/following', [PersonnaliseController::class, 'getFollowingFeed']);
-
-
+    Route::get('Y/feed/following', [PostController::class, 'getFollowingFeed']);
 
 
-Route::get('Y/users/{userId}/followers', [PersonnaliseController::class, 'getUserFollowers']);
-Route::get('Y/users/{userId}/following', [PersonnaliseController::class, 'getUserFollowing']);
 
-Route::get('Y/feed/home', [PersonnaliseController::class, 'getHomeFeed']);
-Route::get('Y/feed/explore', [PersonnaliseController::class, 'getExploreFeed']);
+
+Route::get('Y/users/{userId}/followers', [UserController::class, 'getUserFollowers']);
+Route::get('Y/users/{userId}/following', [UserController::class, 'getUserFollowing']);
+
+Route::get('Y/feed/home', [PostController::class, 'getHomeFeed']);
+Route::get('Y/feed/explore', [PostController::class, 'getExploreFeed']);
 
 
 //Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']);
 //Route::get('/categories/{category}/content', [PersonnaliseController::class, 'getCategoryContent']);
-
 //Route::get('/store/products', [PersonnaliseController::class, 'getStoreProducts']);
-Route::get('Y/fandoms', [PersonnaliseController::class, 'getFandoms']);
+
+
+Route::get('Y/fandoms', [FandomController::class, 'getFandoms']);
 
 // Search fandoms by query: /api/fandoms/search?q=QUERY
-Route::get('Y/fandoms/search', [PersonnaliseController::class, 'searchFandoms']);
+Route::get('Y/fandoms/search', [FandomController::class, 'searchFandoms']);
 
 // Get fandoms by category: /api/categories/{category_id}/fandoms
-Route::get('Y/categories/{category_id}/fandoms', [PersonnaliseController::class, 'getFandomsByCategory']);
+Route::get('Y/categories/{category_id}/fandoms', [FandomController::class, 'getFandomsByCategory']);
 
 // Get posts for a fandom
-Route::get('Y/fandoms/{fandom_id}/posts', [PersonnaliseController::class, 'getFandomPosts']);
+Route::get('Y/fandoms/{fandom_id}/posts', [FandomController::class, 'getFandomPosts']);
 // Get members (users) for a fandom
-Route::get('Y/fandoms/{fandom_id}/members', [PersonnaliseController::class, 'getFandomMembers']);
+Route::get('Y/fandoms/{fandom_id}/members', [FandomController::class, 'getFandomMembers']);
 
 
 
 // Search users by name with pagination
-Route::get('Y/search/users', [PersonnaliseController::class, 'searchUsers']);
+Route::get('Y/search/users', [UserController::class, 'searchUsers']);
 // Search posts by tags, description or subcategory with pagination
-Route::get('Y/search/posts', [PersonnaliseController::class, 'searchPosts']);
+Route::get('Y/search/posts', [PostController::class, 'searchPosts']);
 // Search fandoms by name and description with pagination
-Route::get('Y/search/fandom', [PersonnaliseController::class, 'searchFandomsPaginated']);
+Route::get('Y/search/fandom', [FandomController::class, 'searchFandomsPaginated']);
 
 
-Route::get('Y/subcategories/{subcategory}/content', [PersonnaliseController::class, 'getSubcategoryContent']);
-Route::get('Y/subcategories/{subcategory_id}/fandoms', [PersonnaliseController::class, 'getSubcategoryFandoms']);
+Route::get('Y/subcategories/{subcategory}/content', [SubcategoryController::class, 'getSubcategoryContent']);
+Route::get('Y/subcategories/{subcategory_id}/fandoms', [SubcategoryController::class, 'getSubcategoryFandoms']);
 
-Route::get('Y/hashtags/trending', [PersonnaliseController::class, 'getTrendingHashtags']);
-Route::get('Y/hashtags/{hashtag_id}/posts', [PersonnaliseController::class, 'getHashtagPosts']);
-Route::get('Y/fandoms/trending/top', [PersonnaliseController::class, 'getTrendingFandoms']);
+Route::get('Y/hashtags/trending', [TagsController::class, 'getTrendingHashtags']);
+Route::get('Y/hashtags/{hashtag_id}/posts', [TagsController::class, 'getHashtagPosts']);
+Route::get('Y/fandoms/trending/top', [FandomController::class, 'getTrendingFandoms']);
 
 Route::get('Y/posts/trending/top', [PersonnaliseController::class, 'getTrendingPosts']);
 Route::get('Y/posts/{postId}/comments', [PersonnaliseController::class, 'getPostComments']);
@@ -276,7 +276,7 @@ Route::put('/users/cover-photo', [PersonnaliseController::class, 'updateCoverPho
 // ====================
 // POSTS
 // ====================
-Route::post('/posts/{postId}/share', [PersonnaliseController::class, 'sharePost']);
+Route::post('/posts/{postId}/share', [PostController::class, 'sharePost']);
 
 // ====================
 // SAVED POSTS - PROTECTED
