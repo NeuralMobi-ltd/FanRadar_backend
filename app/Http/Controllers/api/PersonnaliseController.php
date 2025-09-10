@@ -202,23 +202,37 @@ class PersonnaliseController extends Controller
         return response()->json(['message' => 'OTP sent to your email'], 200);
     }
 
-    public function verifyOTP(Request $request)
+    public function verifyregister(Request $request)
 {
     $request->validate([
         'email' => 'required|email|exists:users,email',
         'otp' => 'required|numeric',
     ]);
 
-    $user = User::where('email', $request->email)
-                ->where('otp', $request->otp)
-                ->first();
+    // Récupérer l'utilisateur par email d'abord
+    $user = User::where('email', $request->email)->first();
 
     if (!$user) {
+        return response()->json(['error' => 'Utilisateur introuvable'], 404);
+    }
+
+    // Vérifier si l'OTP correspond
+    if ($user->otp != $request->otp) {
+        // Supprimer le compte si l'OTP est invalide et le compte n'est pas vérifié
+        if (!$user->is_verified) {
+            $user->delete();
+            return response()->json(['error' => 'OTP invalide. Le compte a été supprimé automatiquement.'], 400);
+        }
         return response()->json(['error' => 'OTP invalide'], 400);
     }
 
     // Vérifier l'expiration (10 minutes)
     if (Carbon::now()->diffInMinutes($user->otp_created_at) > 10) {
+        // Supprimer le compte si l'OTP est expiré et le compte n'est pas vérifié
+        if (!$user->is_verified) {
+
+            return response()->json(['error' => 'OTP expiré. Le compte a été supprimé automatiquement.'], 400);
+        }
         return response()->json(['error' => 'OTP expiré'], 400);
     }
 
@@ -231,6 +245,46 @@ class PersonnaliseController extends Controller
 
     return response()->json(['message' => 'OTP validé et compte vérifié'], 200);
 }
+
+    public function verifyOTPforgetPassword(Request $request)
+{
+    $request->validate([
+        'email' => 'required|email|exists:users,email',
+        'otp' => 'required|numeric',
+    ]);
+
+    // Récupérer l'utilisateur par email d'abord
+    $user = User::where('email', $request->email)->first();
+
+    if (!$user) {
+        return response()->json(['error' => 'Utilisateur introuvable'], 404);
+    }
+
+    // Vérifier si l'OTP correspond
+    if ($user->otp != $request->otp) {
+        return response()->json(['error' => 'OTP invalide'], 400);
+    }
+
+    // Vérifier l'expiration (10 minutes)
+    if (Carbon::now()->diffInMinutes($user->otp_created_at) > 10) {
+        // Supprimer le compte si l'OTP est expiré et le compte n'est pas vérifié
+        if (!$user->is_verified) {
+
+            return response()->json(['error' => 'OTP expiré. Le compte a été supprimé automatiquement.'], 400);
+        }
+        return response()->json(['error' => 'OTP expiré'], 400);
+    }
+
+    // Mettre à jour is_verified à true si l'OTP est correct
+    $user->update([
+        'is_verified' => true,
+        'otp' => null,
+        'otp_created_at' => null
+    ]);
+
+    return response()->json(['message' => 'OTP validé et compte vérifié'], 200);
+}
+
 
     public function resetPassword(Request $request){
         $request->validate([
