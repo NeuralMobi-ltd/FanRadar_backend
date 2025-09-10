@@ -1248,4 +1248,130 @@ public function getFandomPosts($fandomId, Request $request)
         }
     }
 
+
+
+
+    public function getCategoryFandoms($categoryId, Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Vérifier que la catégorie existe
+        $category = \App\Models\Category::find($categoryId);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        // Récupérer toutes les sous-catégories de cette catégorie
+        $subcategories = \App\Models\SubCategory::where('category_id', $categoryId)->get();
+        $subcategoryIds = $subcategories->pluck('id')->toArray();
+
+        if (empty($subcategoryIds)) {
+            // Si la catégorie n'a pas de sous-catégories, retourner un résultat vide
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'category' => [
+                        'id' => $category->id,
+                        'name' => $category->name,
+                        'description' => $category->description,
+                    ],
+                    'subcategories' => [],
+                    'fandoms' => [],
+                    'fandoms_count' => 0,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'total_pages' => 0,
+                        'total_items' => 0,
+                        'per_page' => $limit,
+                        'has_more' => false,
+                        'from' => null,
+                        'to' => null
+                    ]
+                ]
+            ]);
+        }
+
+        // Récupérer les fandoms de toutes les sous-catégories avec pagination
+        $fandoms = \App\Models\Fandom::whereIn('subcategory_id', $subcategoryIds)
+            ->with([
+                'subcategory:id,name,category_id'
+            ])
+            ->withCount(['members', 'posts'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Obtenir les rôles de l'utilisateur authentifié pour tous les fandoms s'il est connecté
+        $user = Auth::user();
+        $userMemberships = [];
+        if ($user) {
+            $fandomIds = collect($fandoms->items())->pluck('id')->toArray();
+            $memberships = \App\Models\Member::where('user_id', $user->id)
+                ->whereIn('fandom_id', $fandomIds)
+                ->get();
+            foreach ($memberships as $membership) {
+                $userMemberships[$membership->fandom_id] = $membership->role;
+            }
+        }
+
+        // Formater les fandoms
+        $formattedFandoms = collect($fandoms->items())->map(function ($fandom) use ($userMemberships) {
+            $subcategory = $fandom->subcategory;
+
+            return [
+                'id' => $fandom->id,
+                'name' => $fandom->name,
+                'description' => $fandom->description,
+                'cover_image' => $fandom->cover_image,
+                'logo_image' => $fandom->logo_image,
+                'created_at' => $fandom->created_at ? $fandom->created_at->toISOString() : null,
+                'updated_at' => $fandom->updated_at ? $fandom->updated_at->toISOString() : null,
+                'subcategory' => $subcategory ? [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'category_id' => $subcategory->category_id,
+                ] : null,
+                'members_count' => $fandom->members_count ?? 0,
+                'posts_count' => $fandom->posts_count ?? 0,
+                'is_member' => isset($userMemberships[$fandom->id]),
+                'member_role' => $userMemberships[$fandom->id] ?? null,
+            ];
+        });
+
+        // Formater les sous-catégories pour la réponse
+        $formattedSubcategories = $subcategories->map(function ($subcategory) {
+            return [
+                'id' => $subcategory->id,
+                'name' => $subcategory->name,
+                'description' => $subcategory->description,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'category' => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'description' => $category->description,
+                ],
+                'subcategories' => $formattedSubcategories,
+                'fandoms' => $formattedFandoms,
+                'fandoms_count' => $fandoms->total(),
+                'pagination' => [
+                    'current_page' => $fandoms->currentPage(),
+                    'total_pages' => $fandoms->lastPage(),
+                    'total_items' => $fandoms->total(),
+                    'per_page' => $fandoms->perPage(),
+                    'has_more' => $fandoms->hasMorePages(),
+                    'from' => $fandoms->firstItem(),
+                    'to' => $fandoms->lastItem()
+                ]
+            ]
+        ]);
+    }
+
 }

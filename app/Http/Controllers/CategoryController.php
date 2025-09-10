@@ -127,4 +127,42 @@ class CategoryController extends Controller
             'message' => 'Catégorie supprimée avec succès'
         ]);
     }
+
+
+
+     public function getAllCategories(Request $request) {
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(50, max(1, (int) $request->get('limit', 10)));
+
+        // Récupérer les catégories avec pagination
+        $categories = Category::paginate($limit, ['*'], 'page', $page);
+
+        // Formater les données
+        $formattedCategories = $categories->getCollection()->map(function ($category) {
+            return [
+                'id' => $category->id,
+                'name' => $category->name,
+                'slug' => $category->slug ?? null,
+                'description' => $category->description ?? null,
+                'image' => $category->image ?? null,
+                'created_at' => $category->created_at ? $category->created_at->toISOString() : null,
+                'updated_at' => $category->updated_at ? $category->updated_at->toISOString() : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'categories' => $formattedCategories,
+                'pagination' => [
+                    'current_page' => $categories->currentPage(),
+                    'last_page' => $categories->lastPage(),
+                    'per_page' => $categories->perPage(),
+                    'total' => $categories->total(),
+                    'has_more' => $categories->hasMorePages(),
+                ]
+            ]
+        ]);
+    }
+
 }
