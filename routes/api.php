@@ -96,7 +96,10 @@ Route::post('/Y/auth/register', [PersonnaliseController::class, 'register']);
 //otp
 Route::post('/forgetPassword', [PersonnaliseController::class, 'forgetPassword']);
 Route::post('/resetPassword', [PersonnaliseController::class, 'resetPassword']);
-Route::post('/verifyOTP', [PersonnaliseController::class, 'verifyOTP']);
+
+Route::post('/verifyregister', [PersonnaliseController::class, 'verifyregister']);
+
+Route::post('/verifyOTPforgetPassword', [PersonnaliseController::class, 'verifyOTPforgetPassword']);
 
 
 
