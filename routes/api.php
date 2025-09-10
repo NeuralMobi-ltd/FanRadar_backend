@@ -169,12 +169,7 @@ Route::get('Y/users/{userId}/following', [PersonnaliseController::class, 'getUse
 Route::get('Y/feed/home', [PersonnaliseController::class, 'getHomeFeed']);
 Route::get('Y/feed/explore', [PersonnaliseController::class, 'getExploreFeed']);
 
-
-<<<<<<< HEAD
-Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']);
-=======
-//Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']);
->>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
+// Route::get('Y/categories/list', [PersonnaliseController::class, 'getCategories']);
 //Route::get('/categories/{category}/content', [PersonnaliseController::class, 'getCategoryContent']);
 
 //Route::get('/store/products', [PersonnaliseController::class, 'getStoreProducts']);
@@ -221,45 +216,30 @@ Route::post('Y/favorites/{pProductId}/favorite', [PersonnaliseController::class,
 Route::delete('Y/favorites/{pProductId}/removefavorite', [PersonnaliseController::class, 'removeFavoriteProduct']);
 
 // Routes pour afficher les favoris
-<<<<<<< HEAD
-Route::get('Y/favorites/posts', [PersonnaliseController::class, 'getFavoritePosts']);
-Route::get('Y/favorites/products', [PersonnaliseController::class, 'getFavoriteProducts']);
-=======
 Route::get('Y/myfavorites/posts', [PersonnaliseController::class, 'getFavoritePosts']);
 Route::get('Y/myfavorites/products', [PersonnaliseController::class, 'getFavoriteProducts']);
->>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 
 Route::get('products', [ProductController::class, 'index']);
 Route::get('products/{product}', [ProductController::class, 'show']);
 
-<<<<<<< HEAD
 
-=======
 // Get limited edition products (drag products)
 Route::get('Y/products/drag', [PersonnaliseController::class, 'getDragProducts']);
->>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 
 Route::post('products', [ProductController::class, 'store']);
 Route::put('products/{product}', [ProductController::class, 'update']);
 Route::delete('products/{product}', [ProductController::class, 'destroy']);
 
-<<<<<<< HEAD
-=======
 
-
+// Ratings
 Route::post('/ratings', [\App\Http\Controllers\RatingController::class, 'addOrUpdateRating']);
 Route::delete('/ratings', [\App\Http\Controllers\RatingController::class, 'deleteRating']);
 
->>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 // 🛒 COMMANDES
 Route::get('/orders', [OrderController::class, 'index']);
 Route::get('/orders/my-orders', [OrderController::class, 'getMyOrders']);
 Route::get('/orders/{order}', [OrderController::class, 'show']);
 Route::post('/orders', [OrderController::class, 'store']);
-<<<<<<< HEAD
-=======
-
->>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
 Route::put('/orders/{order}', [OrderController::class, 'update']);
 
@@ -273,12 +253,9 @@ Route::post('admin/users', [\App\Http\Controllers\Api\M_Controller::class, 'addU
 Route::put('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateUser']);
 Route::delete('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteUser']);
 });
-<<<<<<< HEAD
-=======
 
 Route::get('Y/categories/{category_id}/subcategories', [PersonnaliseController::class, 'getCategorySubcategories']);
 Route::get('Y/categories', [PersonnaliseController::class, 'getAllCategories']);
->>>>>>> 7797d81600bd36699b6610ece1e4cc9a158feee0
 
 
 // ====================
@@ -394,11 +371,11 @@ Route::put('/products-simple/{id}', [\App\Http\Controllers\Api\M_Controller::cla
 Route::delete('/products-simple/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteProductSimple']);
 
 
-// Fandoms - personalize controller
-Route::get('fandoms', [PersonnaliseController::class, 'getFandoms']);
-Route::get('fandoms/{id}', [PersonnaliseController::class, 'showFandom']);
-Route::post('fandoms', [PersonnaliseController::class, 'createFandom']);
-Route::delete('fandoms/{id}', [PersonnaliseController::class, 'deleteFandom']);
+// Fandoms - moved to M_Controller
+Route::get('fandoms', [\App\Http\Controllers\Api\M_Controller::class, 'getFandoms']);
+Route::get('fandoms/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'getFandom']);
+Route::post('fandoms', [\App\Http\Controllers\Api\M_Controller::class, 'addFandom']);
+Route::delete('fandoms/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteFandom']);
 
 
 

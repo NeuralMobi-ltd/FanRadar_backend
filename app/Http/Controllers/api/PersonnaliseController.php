@@ -467,7 +467,7 @@ class PersonnaliseController extends Controller
                 'created_at' => $comment->created_at ? $comment->created_at->toISOString() : null,
                 'updated_at' => $comment->updated_at ? $comment->updated_at->toISOString() : null,
                 'user' => $user ? ['id' => $user->id, 'first_name' => $user->first_name, 'last_name' => $user->last_name, 'profile_image' => $this->makeImageUrl($user->profile_image), 'bio' => $user->bio] : null
-            };
+            ];
         });
 
         return response()->json(['success' => true, 'data' => ['post_id' => $postId, 'comments' => $formatted, 'comments_count' => $comments->total(), 'pagination' => ['current_page' => $comments->currentPage(), 'total_pages' => $comments->lastPage(), 'per_page' => $comments->perPage(), 'has_more' => $comments->hasMorePages()]]]);
@@ -476,26 +476,8 @@ class PersonnaliseController extends Controller
     // --------------------
     // FANDOMS / CATEGORIES
     // --------------------
-    public function getFandoms(Request $request)
-    {
-        $fandoms = Fandom::with(['members', 'subcategory.category'])->orderBy('created_at', 'desc')->get();
-        $items = $fandoms->map(function($fandom){
-            $moderatorMember = $fandom->members->firstWhere('role', 'moderator') ?? $fandom->members->firstWhere('role', 'admin') ?? $fandom->members->first();
-            $moderator = $moderatorMember ? ['user_id' => $moderatorMember->user_id ?? null, 'role' => $moderatorMember->role ?? null] : null;
-            return [
-                'id' => $fandom->id,
-                'name' => $fandom->name,
-                'category' => $fandom->subcategory && $fandom->subcategory->category ? $fandom->subcategory->category->name : null,
-                'subcategory' => $fandom->subcategory ? $fandom->subcategory->name : null,
-                'description' => $fandom->description ?? null,
-                'image' => $this->makeImageUrl($fandom->cover_image ?? $fandom->logo_image ?? null),
-                'date' => $fandom->created_at ? $fandom->created_at->toISOString() : null,
-                'moderator' => $moderator
-            ];
-        })->toArray();
 
-        return response()->json(['success' => true, 'data' => ['fandoms' => $items]]);
-    }
+    // Note: primary fandom endpoints have been moved to M_Controller to centralize fandom logic.
 
     public function getFandomsByCategory($category_id, Request $request)
     {
@@ -529,14 +511,6 @@ class PersonnaliseController extends Controller
         });
 
         return response()->json(['success' => true, 'data' => ['category' => ['id' => $category->id, 'name' => $category->name, 'description' => $category->description], 'fandoms' => $formattedFandoms, 'pagination' => ['current_page' => $fandoms->currentPage(), 'last_page' => $fandoms->lastPage(), 'per_page' => $fandoms->perPage(), 'total' => $fandoms->total(), 'has_more' => $fandoms->hasMorePages()]]]);
-    }
-
-    public function deleteFandom($id)
-    {
-        $f = Fandom::find($id);
-        if (!$f) return response()->json(['success' => false, 'error' => 'Fandom not found'], 404);
-        $f->delete();
-        return response()->json(['success' => true, 'message' => 'Fandom deleted']);
     }
 
     // --------------------
@@ -607,7 +581,7 @@ class PersonnaliseController extends Controller
         $postId = $request->post_id;
         $post = Post::find($postId);
         if (!$post) return response()->json(['success' => false, 'message' => 'Post not found'], 404);
-        if ($user->savedPosts()->where('post_id', $postId)->exists()) return response()->json(['success' => false, 'message' => 'Post is already saved'], 409);
+        if ($user->savedPosts()->where('post_id', $postId)->exists()) return response()->json(['success' => false, 'message' => 'Post is already saved', 'post_id' => $postId], 409);
         $user->savedPosts()->attach($postId);
         return response()->json(['success' => true, 'message' => 'Post saved successfully']);
     }
