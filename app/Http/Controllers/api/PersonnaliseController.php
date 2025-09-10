@@ -114,7 +114,7 @@ class PersonnaliseController extends Controller
         $validator = Validator::make($request->all(), [
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
-            'email' => 'required|string|email|unique:users,email',
+            'email' => 'required|string|email',
             'password' => 'required|string|min:6',
             'date_naissance' => 'nullable|date',
             'gender' => 'nullable|in:male,female,other',
@@ -126,6 +126,21 @@ class PersonnaliseController extends Controller
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Vérifier si un utilisateur avec cet email existe déjà
+        $existingUser = User::where('email', $request->email)->first();
+
+        if ($existingUser) {
+            // Si l'utilisateur existe mais n'est PAS vérifié, le supprimer
+            if (!$existingUser->is_verified) {
+                $existingUser->delete();
+            } else {
+                // Si l'utilisateur existe ET est vérifié, retourner une erreur
+                return response()->json([
+                    'errors' => ['email' => ['Cet email est déjà utilisé.']]
+                ], 422);
+            }
         }
 
         // Générer un OTP pour la vérification
