@@ -1408,7 +1408,9 @@ class PersonnaliseController extends Controller
             'data' => [
                 'category' => [
                     'id' => $category->id,
-                    'name' => $category->name
+                    'name' => $category->name,
+                    'image' => $category->image,
+                    'description' => $category->description
                 ],
                 'subcategories' => $subcategories
             ]
@@ -1484,6 +1486,7 @@ class PersonnaliseController extends Controller
                 'category' => [
                     'id' => $category->id,
                     'name' => $category->name,
+                    'image' => $category->image,
                     'description' => $category->description,
                 ],
                 'fandoms' => $formattedFandoms,
@@ -3034,7 +3037,12 @@ class PersonnaliseController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                'category' => $cat->name,
+                'category' => [
+                    'id' => $cat->id,
+                    'name' => $cat->name,
+                    'image' => $cat->image,
+                    'description' => $cat->description
+                ],
                 'posts' => $posts
             ]
         ]);

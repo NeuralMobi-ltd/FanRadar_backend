@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class CategoryController extends Controller
 {
@@ -31,10 +32,24 @@ class CategoryController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-
+            'description' => 'nullable|string|max:1000',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
-        $category = Category::create($validated);
+        // Gérer l'upload de l'image
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            if ($file->isValid()) {
+                $imagePath = $file->store('category/images', 'public');
+            }
+        }
+
+        $category = Category::create([
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'image' => $imagePath,
+        ]);
 
         return response()->json([
             'message' => 'Catégorie créée avec succès',
@@ -53,10 +68,38 @@ class CategoryController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-
+            'description' => 'sometimes|nullable|string|max:1000',
+            'image' => 'sometimes|nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
-        $category->update($validated);
+        $updateData = [];
+
+        // Mettre à jour le nom si fourni
+        if (isset($validated['name'])) {
+            $updateData['name'] = $validated['name'];
+        }
+
+        // Mettre à jour la description si fournie
+        if (array_key_exists('description', $validated)) {
+            $updateData['description'] = $validated['description'];
+        }
+
+        // Gérer l'upload de la nouvelle image
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            if ($file->isValid()) {
+                // Supprimer l'ancienne image si elle existe
+                if ($category->image && Storage::disk('public')->exists($category->image)) {
+                    Storage::disk('public')->delete($category->image);
+                }
+
+                // Uploader la nouvelle image
+                $imagePath = $file->store('category/images', 'public');
+                $updateData['image'] = $imagePath;
+            }
+        }
+
+        $category->update($updateData);
 
         return response()->json([
             'message' => 'Catégorie mise à jour avec succès',
@@ -71,6 +114,11 @@ class CategoryController extends Controller
 
         if (!$category) {
             return response()->json(['message' => 'Catégorie non trouvée'], 404);
+        }
+
+        // Supprimer l'image associée si elle existe
+        if ($category->image && Storage::disk('public')->exists($category->image)) {
+            Storage::disk('public')->delete($category->image);
         }
 
         $category->delete();

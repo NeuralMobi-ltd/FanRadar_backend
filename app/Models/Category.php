@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class Category extends Model
 {
     use HasFactory;
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'image', 'description'];
 
     // Une catégorie a plusieurs sous-catégories
     public function subcategories()
