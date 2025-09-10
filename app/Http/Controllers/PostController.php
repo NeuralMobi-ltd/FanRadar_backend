@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Post;
 use App\Models\Media;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 
 class PostController extends Controller
 {
@@ -105,5 +107,669 @@ class PostController extends Controller
             'message' => 'Post et ses médias supprimés.'
         ]);
     }
+
+
+
+
+    public function getUserPosts($userId, Request $request)
+        {
+            $page = $request->get('page', 1);
+            $limit = $request->get('limit', 10);
+
+
+            $posts = Post::where('user_id', $userId)
+                ->with(['medias', 'tags'])
+                ->latest()
+                ->paginate($limit, ['*'], 'page', $page);
+
+            $formattedPosts = collect($posts->items())->map(function ($post) {
+                return [
+                    'id' => $post->id,
+                    'description' => $post->description,
+                    'content_status' => $post->content_status,
+                    'schedule_at' => $post->schedule_at,
+                    'category_id' => $post->category_id ?? null,
+                    'created_at' => $post->created_at,
+                    'updated_at' => $post->updated_at,
+                    'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
+                    'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'posts' => $formattedPosts,
+                    'pagination' => [
+                        'page' => $posts->currentPage(),
+                        'limit' => $posts->perPage(),
+                        'total' => $posts->total(),
+                        'pages' => $posts->lastPage()
+                    ]
+                ]
+            ]);
+        }
+
+
+    public function createPost(Request $request)
+    {
+        $validated = $request->validate([
+
+            'schedule_at' => 'nullable|date',
+            'description' => 'nullable|string',
+        'subcategory_id' => 'nullable|integer|exists:subcategories,id',
+            'content_status' => 'required|in:draft,published,archived',
+            'medias' => 'nullable|array',
+            'medias.*' => 'file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
+            'tags' => 'nullable|array',
+            'tags.*' => 'string|max:255',
+        ]);
+
+        $user = Auth::user();
+        $validated['user_id'] = $user->id;
+        $tags = $validated['tags'] ?? [];
+        unset($validated['tags']);
+        $post = Post::create($validated);
+
+        // Associer les tags si fournis
+        if (!empty($tags)) {
+            foreach ($tags as $tagName) {
+                $tag = \App\Models\Tag::firstOrCreate(['tag_name' => $tagName]);
+                $post->tags()->syncWithoutDetaching($tag->id);
+            }
+        }
+
+        $mediaFiles = $request->file('medias');
+        if (is_iterable($mediaFiles)) {
+            foreach ($mediaFiles as $file) {
+                $extension = strtolower($file->getClientOriginalExtension());
+
+                // Détecte type média selon extension
+                $imageExtensions = ['jpg', 'jpeg', 'png'];
+                $videoExtensions = ['mp4', 'mov'];
+
+                if (in_array($extension, $imageExtensions)) {
+                    $mediaType = 'image';
+                    $folder = 'posts/images';
+                } elseif (in_array($extension, $videoExtensions)) {
+                    $mediaType = 'video';
+                    $folder = 'posts/videos';
+                } else {
+                    // Extension non supportée (ne devrait pas arriver à cause de la validation)
+                    continue;
+                }
+
+                $path = $file->store($folder, 'public');
+
+                // Vérifier si le fichier est bien enregistré dans storage
+                if (Storage::disk('public')->exists($path)) {
+                    $post->medias()->create([
+                        'file_path' => $path,
+                        'media_type' => $mediaType,
+                    ]);
+                } else {
+                    // Optionnel: log ou ajouter un message d'erreur si besoin
+                    // \Log::error("Le fichier média n'a pas été enregistré: $path");
+                    continue;
+                }
+            }
+        }
+
+        // Charger les tags pour la réponse
+        $post->load('tags');
+        return response()->json([
+            'message' => 'Post créé avec succès.',
+            'post' => [
+                'id' => $post->id,
+                'body' => $post->body,
+                'subcategory_id' => $post->subcategory_id ?? null,
+                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'createdAt' => $post->created_at ? $post->created_at->toISOString() : null
+            ]
+        ], 201);
+}
+
+
+public function updatePost($postId, Request $request)
+    {
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NOT_FOUND',
+                    'message' => 'Post non trouvé'
+                ]
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'description' => 'nullable|string',
+            'content_status' => 'sometimes|in:draft,published,archived',
+            'schedule_at' => 'nullable|date',
+            'medias' => 'nullable|array',
+            'medias.*' => 'file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
+            'tags' => 'nullable|array',
+            'tags.*' => 'string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'VALIDATION_ERROR',
+                    'message' => 'Données invalides',
+                    'details' => $validator->errors()
+                ]
+            ], 422);
+        }
+
+        $updateData = [];
+        if ($request->has('body')) $updateData['body'] = $request->body;
+        if ($request->has('description')) $updateData['description'] = $request->description;
+        if ($request->has('content_status')) $updateData['content_status'] = $request->content_status;
+        if ($request->has('schedule_at')) $updateData['schedule_at'] = $request->schedule_at;
+
+        $post->update($updateData);
+
+        // Gérer l'upload de nouveaux médias (ajoute, ne supprime pas les anciens)
+        $mediaFiles = $request->file('medias');
+        if (is_iterable($mediaFiles)) {
+            foreach ($mediaFiles as $file) {
+                $extension = strtolower($file->getClientOriginalExtension());
+                $imageExtensions = ['jpg', 'jpeg', 'png'];
+                $videoExtensions = ['mp4', 'mov'];
+                if (in_array($extension, $imageExtensions)) {
+                    $mediaType = 'image';
+                    $folder = 'posts/images';
+                } elseif (in_array($extension, $videoExtensions)) {
+                    $mediaType = 'video';
+                    $folder = 'posts/videos';
+                } else {
+                    continue;
+                }
+                $path = $file->store($folder, 'public');
+                // Vérifier si le fichier est bien enregistré dans storage
+                if (Storage::disk('public')->exists($path)) {
+                    $post->medias()->create([
+                        'file_path' => $path,
+                        'media_type' => $mediaType,
+                    ]);
+                } else {
+                    // Optionnel: log ou ajouter un message d'erreur si besoin
+                    // \Log::error("Le fichier média n'a pas été enregistré: $path");
+                    continue;
+                }
+            }
+        }
+
+        // Rafraîchir les relations pour la réponse
+        $post->load('medias', 'tags', 'user');
+
+        return response()->json([
+            'message' => 'Post mis à jour avec succès.',
+            'post' => [
+                'id' => $post->id,
+                'body' => $post->body,
+                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'createdAt' => $post->created_at ? $post->created_at->toISOString() : null
+            ]
+        ], 200);
+    }
+
+
+     public function deletePost($postId, Request $request)
+    {
+        $post = Post::with('medias')->find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'NOT_FOUND',
+                    'message' => 'Post non trouvé'
+                ]
+            ], 404);
+        }
+
+        // Supprimer les fichiers médias associés
+        foreach ($post->medias as $media) {
+            if (isset($media->file_path) && Storage::disk('public')->exists($media->file_path)) {
+                Storage::disk('public')->delete($media->file_path);
+            }
+            $media->delete();
+        }
+
+        // Détacher les tags associés dans la table taggables
+        if (method_exists($post, 'tags')) {
+            $post->tags()->detach();
+        }
+
+        $post->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Post supprimé avec succès.'
+        ], 200);
+    }
+
+
+    public function addCommentToPost($postId, Request $request) {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $request->validate([
+            'content' => 'required|string|max:2000',
+        ]);
+
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found'
+            ], 404);
+        }
+
+        $post->comments()->create([
+            'user_id' => $user->id,
+            'post_id' => $post->id,
+            'content' => $request->content,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Commentaire ajouté avec succès.',
+        ], 201);
+    }
+
+
+     public function sharePost($postId, Request $request) {
+       //
+    }
+
+
+   public function savePost(Request $request)
+    {
+        $request->validate([
+            'post_id' => 'required|exists:posts,id',
+        ]);
+
+        $user = $request->user();
+        $postId = $request->post_id;
+
+        // Vérifier si le post existe
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found',
+            ], 404);
+        }
+
+        // Vérifier si le post est déjà sauvegardé
+        if ($user->hasSavedPost($postId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post is already saved',
+            ], 409);
+        }
+
+        // Sauvegarder le post
+        $user->savedPosts()->attach($postId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Post saved successfully',
+        ]);
+    }
+
+
+    public function unsavePost(Request $request)
+    {
+        $request->validate([
+            'post_id' => 'required|exists:posts,id',
+        ]);
+
+        $user = $request->user();
+        $postId = $request->post_id;
+
+        // Vérifier si le post existe
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found',
+            ], 404);
+        }
+
+        // Vérifier si le post est sauvegardé
+        if (!$user->hasSavedPost($postId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post is not saved',
+            ], 404);
+        }
+
+        // Retirer le post des sauvegardés
+        $user->savedPosts()->detach($postId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Post unsaved successfully',
+        ]);
+    }
+
+    public function getSavedPosts(Request $request)
+    {
+        $user = $request->user();
+        $page = $request->get('page', 1);
+        $limit = $request->get('limit', 10);
+
+        // Récupérer les posts sauvegardés avec pagination
+        $savedPosts = $user->savedPosts()
+            ->with(['user', 'medias', 'tags'])
+            ->orderBy('saved_posts.created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts
+        $formattedPosts = $savedPosts->map(function ($post) {
+            $likeCount = method_exists($post, 'favorites') ? $post->favorites()->count() : 0;
+            $commentCount = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+            $media = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
+            $tags = method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [];
+
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content' => $post->content ?? $post->body ?? '',
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'category_id' => $post->category_id ?? null,
+                'subcategory_id' => $post->subcategory_id ?? null,
+                'fandom_id' => $post->fandom_id ?? null,
+                'media' => $media,
+                'tags' => $tags,
+                'user' => $post->user ? [
+                    'id' => $post->user->id,
+                    'first_name' => $post->user->first_name,
+                    'last_name' => $post->user->last_name,
+                    'profile_image' => $post->user->profile_image,
+                ] : null,
+                'likes_count' => $likeCount,
+                'comments_count' => $commentCount,
+                'saved_at' => $post->pivot->created_at ?? null,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts,
+                'pagination' => [
+                    'page' => $savedPosts->currentPage(),
+                    'limit' => $savedPosts->perPage(),
+                    'total' => $savedPosts->total(),
+                    'pages' => $savedPosts->lastPage(),
+                    'hasNext' => $savedPosts->hasMorePages()
+                ]
+            ]
+        ]);
+    }
+
+
+
+
+    public function getFollowingFeed(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized - User must be logged in'
+            ], 401);
+        }
+
+        $page = $request->get('page', 1);
+        $limit = min(50, max(1, (int) $request->get('limit', 20)));
+
+        // Récupérer les IDs des utilisateurs que l'utilisateur actuel suit
+        $followingUserIds = \App\Models\Follow::where('follower_id', $user->id)
+            ->pluck('following_id')
+            ->toArray();
+
+        if (empty($followingUserIds)) {
+            // Si l'utilisateur ne suit personne, retourner un feed vide
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'posts' => [],
+                    'following_count' => 0,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'total_pages' => 0,
+                        'total_items' => 0,
+                        'per_page' => $limit,
+                        'has_more' => false,
+                        'from' => null,
+                        'to' => null
+                    ]
+                ]
+            ]);
+        }
+
+        // Récupérer les posts des utilisateurs suivis avec pagination
+        $posts = \App\Models\Post::whereIn('user_id', $followingUserIds)
+            ->where('content_status', 'published')
+            ->with(['user:id,first_name,last_name,email,profile_image,bio', 'medias', 'tags', 'fandom:id,name'])
+            ->withCount(['favorites', 'comments'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts
+        $formattedPosts = collect($posts->items())->map(function ($post) {
+            $user = $post->user;
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+                'fandom' => $post->fandom ? [
+                    'id' => $post->fandom->id,
+                    'name' => $post->fandom->name,
+                ] : null,
+                'media' => $post->medias ? $post->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'media_type' => $media->media_type,
+                    ];
+                })->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'feedback' => $post->feedback ?? 0,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts,
+                'following_count' => count($followingUserIds),
+                'pagination' => [
+                    'current_page' => $posts->currentPage(),
+                    'total_pages' => $posts->lastPage(),
+                    'total_items' => $posts->total(),
+                    'per_page' => $posts->perPage(),
+                    'has_more' => $posts->hasMorePages(),
+                    'from' => $posts->firstItem(),
+                    'to' => $posts->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+
+public function getHomeFeed(Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = $request->get('limit', 20);
+
+        $posts = Post::with(['user', 'medias', 'tags'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        $formattedPosts = $posts->map(function ($post) {
+            // Récupérer toutes les données du post
+            $postData = $post->toArray();
+
+            // Ajouter les compteurs
+            $postData['likes_count'] = method_exists($post, 'favorites') ? $post->favorites()->count() : 0;
+            $postData['comments_count'] = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+
+            // Ajouter les médias
+            $postData['media'] = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
+
+            // Ajouter les tags
+            $postData['tags'] = method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [];
+
+            // Supprimer le champ medias (garder seulement media)
+            unset($postData['medias']);
+
+            // Formater l'utilisateur
+            if (isset($postData['user']) && is_array($postData['user'])) {
+                // Supprimer les champs sensibles de l'utilisateur
+                unset($postData['user']['password']);
+                unset($postData['user']['email_verified_at']);
+                unset($postData['user']['remember_token']);
+            }
+
+            return $postData;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts,
+                'pagination' => [
+                    'page' => $posts->currentPage(),
+                    'limit' => $posts->perPage(),
+                    'hasNext' => $posts->hasMorePages()
+                ]
+            ]
+        ]);
+    }
+
+    public function getExploreFeed(Request $request)
+     {
+        //not implemented yet
+     }
+
+
+    public function searchPosts(Request $request)
+    {
+        $query = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 10);
+
+        // Valider les paramètres
+        if (empty($query)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Search query is required'
+            ], 400);
+        }
+
+        if ($perPage > 50) {
+            $perPage = 50; // Limiter à 50 résultats par page maximum
+        }
+
+        // Recherche dans les posts par description, tags ou sous-catégorie
+        $posts = \App\Models\Post::where(function($q) use ($query) {
+                // Recherche dans la description du post
+                $q->where('description', 'LIKE', "%{$query}%")
+                  // Recherche dans les tags associés au post
+                  ->orWhereHas('tags', function($tagQuery) use ($query) {
+                      $tagQuery->where('tag_name', 'LIKE', "%{$query}%");
+                  })
+                  // Recherche dans la sous-catégorie du post
+                  ->orWhereHas('subcategory', function($subQuery) use ($query) {
+                      $subQuery->where('name', 'LIKE', "%{$query}%");
+                  });
+            })
+            ->where('content_status', 'published') // Seulement les posts publiés
+            ->with(['user:id,first_name,last_name,email,profile_image', 'medias', 'tags', 'subcategory:id,name'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Formater les données des posts
+        $formattedPosts = $posts->getCollection()->map(function ($post) {
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at,
+                'user' => $post->user ? [
+                    'id' => $post->user->id,
+                    'first_name' => $post->user->first_name,
+                    'last_name' => $post->user->last_name,
+                    'full_name' => $post->user->first_name . ' ' . $post->user->last_name,
+                    'email' => $post->user->email,
+                    'profile_image' => $post->user->profile_image
+                ] : null,
+                'media' => $post->medias ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'subcategory' => $post->subcategory ? [
+                    'id' => $post->subcategory->id,
+                    'name' => $post->subcategory->name
+                ] : null,
+                'likes_count' => $post->favorites ? $post->favorites()->count() : 0,
+                'comments_count' => $post->comments ? $post->comments()->count() : 0
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'search_query' => $query,
+                'posts' => $formattedPosts,
+                'pagination' => [
+                    'current_page' => $posts->currentPage(),
+                    'total_pages' => $posts->lastPage(),
+                    'total_items' => $posts->total(),
+                    'per_page' => $posts->perPage(),
+                    'has_more' => $posts->hasMorePages(),
+                    'from' => $posts->firstItem(),
+                    'to' => $posts->lastItem()
+                ]
+            ]
+        ], 200);
+    }
+
+
+
 
 }

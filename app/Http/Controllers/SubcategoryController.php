@@ -76,4 +76,126 @@ class SubcategoryController extends Controller
 
         return response()->json(['message' => 'Sous-catégorie supprimée avec succès.']);
     }
+
+
+
+    public function getSubcategoryContent($subcategoryId)
+    {
+        // Récupérer la sous-catégorie avec sa catégorie parent
+        $subcategory = \App\Models\Subcategory::with(['category'])->find($subcategoryId);
+
+        if (!$subcategory) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sous-catégorie introuvable'
+            ], 404);
+        }
+
+        // Récupérer tous les posts associés à cette sous-catégorie avec leurs relations
+        $posts = $subcategory->posts()->with([
+            'user:id,first_name,last_name,profile_image',
+            'tags:id,tag_name',
+            'medias:id,file_path,media_type,mediable_id,mediable_type' // Inclure les médias
+        ])->get();
+
+        // Formatter la réponse
+        $response = [
+            'success' => true,
+            'data' => [
+                'subcategory' => [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'category' => $subcategory->category ? [
+                        'id' => $subcategory->category->id,
+                        'name' => $subcategory->category->name
+                    ] : null,
+                    'created_at' => $subcategory->created_at,
+                    'updated_at' => $subcategory->updated_at
+                ],
+                'posts' => $posts->map(function ($post) {
+                    return [
+                        'id' => $post->id,
+                        'description' => $post->description,
+                        'feedback' => $post->feedback,
+                        'schedule_at' => $post->schedule_at,
+                        'content_status' => $post->content_status,
+                        'media' => $post->media, // Champ media (array)
+                        'user' => $post->user ? [
+                            'id' => $post->user->id,
+                            'first_name' => $post->user->first_name,
+                            'last_name' => $post->user->last_name,
+                            'profile_image' => $post->user->profile_image
+                        ] : null,
+                        'tags' => $post->tags->pluck('tag_name')->toArray(), // Tableau simple des noms
+                        'medias' => $post->medias->map(function ($media) {
+                            return [
+                                'id' => $media->id,
+                                'file_path' => $media->file_path,
+                                'media_type' => $media->media_type
+                            ];
+                        }), // Médias polymorphes
+                         'likes_count' => method_exists($post, 'favorites') ? $post->favorites()->count() : 0,
+                         'comments_count' => method_exists($post, 'comments') ? $post->comments()->count() : 0,
+                        'created_at' => $post->created_at,
+                        'updated_at' => $post->updated_at
+                    ];
+                }),
+                'posts_count' => $posts->count()
+            ]
+        ];
+
+        return response()->json($response, 200);
+    }
+
+
+public function getSubcategoryFandoms($subcategoryId)
+    {
+        // Récupérer la sous-catégorie avec sa catégorie parent
+        $subcategory = \App\Models\SubCategory::with(['category'])->find($subcategoryId);
+
+        if (!$subcategory) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sous-catégorie introuvable'
+            ], 404);
+        }
+
+        // Récupérer tous les fandoms associés à cette sous-catégorie avec le nombre de membres et de posts
+        $fandoms = \App\Models\Fandom::where('subcategory_id', $subcategoryId)
+            ->withCount(['members', 'posts'])
+            ->get();
+
+        // Formater les fandoms
+        $formattedFandoms = $fandoms->map(function ($fandom) {
+            // Récupérer toutes les données de la table fandom
+            $fandomData = $fandom->toArray();
+
+            // Ajouter les compteurs
+            $fandomData['members_count'] = $fandom->members_count ?? 0;
+            $fandomData['posts_count'] = $fandom->posts_count ?? 0;
+
+            return $fandomData;
+        });
+
+        // Formatter la réponse
+        $response = [
+            'success' => true,
+            'data' => [
+                'subcategory' => [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'description' => $subcategory->description,
+                    'category' => $subcategory->category ? [
+                        'id' => $subcategory->category->id,
+                        'name' => $subcategory->category->name
+                    ] : null
+                ],
+                'fandoms' => $formattedFandoms,
+                'fandoms_count' => $fandoms->count()
+            ]
+        ];
+
+        return response()->json($response, 200);
+    }
+
 }
