@@ -128,6 +128,8 @@ class PersonnaliseController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Générer un OTP pour la vérification
+        $otp = rand(100000, 999999);
 
         $user = User::create([
             'first_name' => $request->first_name,
@@ -139,11 +141,15 @@ class PersonnaliseController extends Controller
             'date_naissance' => $request->date_naissance,
             'gender' => $request->gender,
             'bio' => $request->bio ?? null,
-            'otp' => null,
-            'otp_created_at' => null,
+            'otp' => $otp,
+            'otp_created_at' => now(),
+            'is_verified' => false,
         ]);
 
         $user->assignRole('user');
+
+        // Envoyer l'OTP par email pour la vérification
+        Mail::to($user->email)->send(new OTPMail($otp));
 
         // Enregistrer les catégories préférées si fournies
         $preferredCategories = [];
@@ -164,26 +170,9 @@ class PersonnaliseController extends Controller
         // (Suppression du calcul de l'âge)
 
         return response()->json([
-            'message' => 'Inscription réussie.',
-            'user' => [
-                'id' => $user->id,
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
-                'email' => $user->email,
-                'profile_image' => $user->profile_image,
-                'background_image' => $user->background_image,
-                'date_naissance' => $user->date_naissance,
-                'gender' => $user->gender,
-                'preferred_categories' => $preferredCategories,
-                'role' => $roleNames->first() ?? null,
-                'permissions' => $permissionNames->toArray(),
-                'stats' => [
-                    'followers' => 0,
-                    'following' => 0,
-                    'posts' => 0
-                ],
-            ],
-            'token' => $token,
+            'message' => 'Inscription réussie. Un code OTP a été envoyé à votre email. Veuillez récupérer et vérifier votre OTP pour activer votre compte.',
+            'email' => $user->email,
+            'next_step' => 'Vérifiez votre email et utilisez l\'API verifyOTP pour confirmer votre inscription.'
         ], 201);
     }
 
@@ -233,7 +222,14 @@ class PersonnaliseController extends Controller
         return response()->json(['error' => 'OTP expiré'], 400);
     }
 
-    return response()->json(['message' => 'OTP validé'], 200);
+    // Mettre à jour is_verified à true si l'OTP est correct
+    $user->update([
+        'is_verified' => true,
+        'otp' => null,
+        'otp_created_at' => null
+    ]);
+
+    return response()->json(['message' => 'OTP validé et compte vérifié'], 200);
 }
 
     public function resetPassword(Request $request){
@@ -4210,10 +4206,6 @@ class PersonnaliseController extends Controller
         ]);
     }
 
-    /**
-     * Récupérer tous les favoris de l'utilisateur authentifié (posts et produits)
-     * Route: GET /api/Y/favorites
-     */
 
 
 }
