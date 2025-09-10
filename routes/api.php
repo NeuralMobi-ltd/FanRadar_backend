@@ -4,10 +4,12 @@ use App\Http\Controllers\Api\AuthentificationController;
 use App\Http\Controllers\Api\PersonnaliseController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\FandomController;
+use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderProductController;
 use App\Http\Controllers\PostController;
+use App\Http\Controllers\RatingController;
 use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TagsController;
@@ -209,26 +211,26 @@ Route::get('Y/hashtags/trending', [TagsController::class, 'getTrendingHashtags']
 Route::get('Y/hashtags/{hashtag_id}/posts', [TagsController::class, 'getHashtagPosts']);
 Route::get('Y/fandoms/trending/top', [FandomController::class, 'getTrendingFandoms']);
 
-Route::get('Y/posts/trending/top', [PersonnaliseController::class, 'getTrendingPosts']);
-Route::get('Y/posts/{postId}/comments', [PersonnaliseController::class, 'getPostComments']);
-Route::get('Y/categories/{category_id}/posts', [PersonnaliseController::class, 'getCategoryPosts']);
-Route::get('Y/categories/{category_id}/fandoms', [PersonnaliseController::class, 'getCategoryFandoms']);
+Route::get('Y/posts/trending/top', [PostController::class, 'getTrendingPosts']);
+Route::get('Y/posts/{postId}/comments', [PostController::class, 'getPostComments']);
+Route::get('Y/categories/{category_id}/posts', [PostController::class, 'getCategoryPosts']);
+Route::get('Y/categories/{category_id}/fandoms', [FandomController::class, 'getCategoryFandoms']);
 
 
-Route::post('Y/posts/{postId}/favorite', [PersonnaliseController::class, 'addfavoritePost']);
-Route::delete('Y/posts/{postId}/removefavorite', [PersonnaliseController::class, 'removefavoritePost']);
-Route::post('Y/favorites/{pProductId}/favorite', [PersonnaliseController::class, 'addFavoriteProduct']);
-Route::delete('Y/favorites/{pProductId}/removefavorite', [PersonnaliseController::class, 'removeFavoriteProduct']);
+Route::post('Y/posts/{postId}/favorite', [FavoriteController::class, 'addfavoritePost']);
+Route::delete('Y/posts/{postId}/removefavorite', [FavoriteController::class, 'removefavoritePost']);
+Route::post('Y/favorites/{pProductId}/favorite', [FavoriteController::class, 'addFavoriteProduct']);
+Route::delete('Y/favorites/{pProductId}/removefavorite', [FavoriteController::class, 'removeFavoriteProduct']);
 
 // Routes pour afficher les favoris
-Route::get('Y/myfavorites/posts', [PersonnaliseController::class, 'getFavoritePosts']);
-Route::get('Y/myfavorites/products', [PersonnaliseController::class, 'getFavoriteProducts']);
+Route::get('Y/myfavorites/posts', [PostController::class, 'getFavoritePosts']);
+Route::get('Y/myfavorites/products', [ProductController::class, 'getFavoriteProducts']);
 
 Route::get('products', [ProductController::class, 'index']);
 Route::get('products/{product}', [ProductController::class, 'show']);
 
 // Get limited edition products (drag products)
-Route::get('Y/products/drag', [PersonnaliseController::class, 'getDragProducts']);
+Route::get('Y/products/drag', [ProductController::class, 'getDragProducts']);
 
 Route::post('products', [ProductController::class, 'store']);
 Route::put('products/{product}', [ProductController::class, 'update']);
@@ -236,8 +238,8 @@ Route::delete('products/{product}', [ProductController::class, 'destroy']);
 
 
 
-Route::post('/ratings', [\App\Http\Controllers\RatingController::class, 'addOrUpdateRating']);
-Route::delete('/ratings', [\App\Http\Controllers\RatingController::class, 'deleteRating']);
+Route::post('/ratings', [RatingController::class, 'addOrUpdateRating']);
+Route::delete('/ratings', [RatingController::class, 'deleteRating']);
 
 // 🛒 COMMANDES
 Route::get('/orders', [OrderController::class, 'index']);
@@ -259,8 +261,8 @@ Route::put('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, '
 Route::delete('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteUser']);
 });
 
-Route::get('Y/categories/{category_id}/subcategories', [PersonnaliseController::class, 'getCategorySubcategories']);
-Route::get('Y/categories', [PersonnaliseController::class, 'getAllCategories']);
+Route::get('Y/categories/{category_id}/subcategories', [SubcategoryController::class, 'getCategorySubcategories']);
+Route::get('Y/categories', [CategoryController::class, 'getAllCategories']);
 
 
 // ====================
@@ -293,6 +295,7 @@ Route::middleware('auth:sanctum')->group(function () {
 // ====================
 // STORE / E-COMMERCE
 // ====================
+/*
 Route::get('/store/categories', [PersonnaliseController::class, 'getStoreCategories']);
 Route::get('/store/brands', [PersonnaliseController::class, 'getStoreBrands']);
 Route::post('/store/cart', [PersonnaliseController::class, 'addToCart']);
@@ -310,6 +313,7 @@ Route::post('/store/orders/{orderId}/review', [PersonnaliseController::class, 'r
 // UPLOAD IMAGE
 // ====================
 Route::post('/upload/image', [PersonnaliseController::class, 'uploadImage']);
+*/
 
 // ========== Partie des Api de Oucharou ==========
 // ROLES & PERMISSIONS

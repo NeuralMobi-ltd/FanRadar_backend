@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Favorite;
 use App\Models\Post;
 use App\Models\Media;
 use Illuminate\Http\Request;
@@ -771,5 +772,336 @@ public function getHomeFeed(Request $request)
 
 
 
+
+     public function getTrendingPosts(Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = $request->get('limit', 20);
+        $days = max(1, (int) $request->get('days', 7)); // Trending sur les X derniers jours
+
+        // Calculer la date de début
+        $startDate = now()->subDays($days);
+
+        // Récupérer les posts avec le count des favorites et commentaires
+        $trendingPosts = \App\Models\Post::with(['user', 'medias', 'tags'])
+            ->where('content_status', 'published')
+            ->where('created_at', '>=', $startDate)
+            ->withCount(['favorites', 'comments'])
+            ->orderBy('favorites_count', 'desc')
+            ->orderBy('comments_count', 'desc')
+            ->take($limit)
+            ->get();
+
+        // Formater les posts EXACTEMENT comme getHomeFeed
+        $formattedPosts = $trendingPosts->map(function ($post) {
+            // Récupérer toutes les données du post
+            $postData = $post->toArray();
+
+            // Ajouter les compteurs
+            $postData['comments_count'] = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+
+            // Ajouter les médias
+            $postData['media'] = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
+
+            // Ajouter les tags
+            $postData['tags'] = method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [];
+
+            // Supprimer le champ medias (garder seulement media)
+            unset($postData['medias']);
+
+            // Formater l'utilisateur
+            if (isset($postData['user']) && is_array($postData['user'])) {
+                // Supprimer les champs sensibles de l'utilisateur
+                unset($postData['user']['password']);
+                unset($postData['user']['email_verified_at']);
+                unset($postData['user']['remember_token']);
+            }
+
+            return $postData;
+        });
+
+        // Même structure de réponse que getHomeFeed
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts->values(),
+                'pagination' => [
+                    'page' => 1,
+                    'limit' => $limit,
+                    'hasNext' => false
+                ]
+            ]
+        ]);
+    }
+
+
+
+    public function getPostComments($postId, Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Vérifier que le post existe
+        $post = \App\Models\Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found'
+            ], 404);
+        }
+
+        // Récupérer les commentaires avec pagination
+        $comments = \App\Models\Comment::where('post_id', $postId)
+            ->with(['user:id,first_name,last_name,email,profile_image,bio'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les commentaires
+        $formattedComments = collect($comments->items())->map(function ($comment) {
+            $user = $comment->user;
+            return [
+                'id' => $comment->id,
+                'content' => $comment->content,
+                'created_at' => $comment->created_at ? $comment->created_at->toISOString() : null,
+                'updated_at' => $comment->updated_at ? $comment->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'post_id' => $postId,
+                'comments' => $formattedComments,
+                'comments_count' => $comments->total(),
+                'pagination' => [
+                    'current_page' => $comments->currentPage(),
+                    'total_pages' => $comments->lastPage(),
+                    'total_items' => $comments->total(),
+                    'per_page' => $comments->perPage(),
+                    'has_more' => $comments->hasMorePages(),
+                    'from' => $comments->firstItem(),
+                    'to' => $comments->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+
+
+    public function getCategoryPosts($categoryId, Request $request)
+    {
+        $page = $request->get('page', 1);
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Vérifier que la catégorie existe
+        $category = \App\Models\Category::find($categoryId);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        // Récupérer toutes les sous-catégories de cette catégorie
+        $subcategories = \App\Models\SubCategory::where('category_id', $categoryId)->get();
+        $subcategoryIds = $subcategories->pluck('id')->toArray();
+
+        if (empty($subcategoryIds)) {
+            // Si la catégorie n'a pas de sous-catégories, retourner un résultat vide
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'category' => [
+                        'id' => $category->id,
+                        'name' => $category->name,
+                        'description' => $category->description,
+                    ],
+                    'subcategories' => [],
+                    'posts' => [],
+                    'posts_count' => 0,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'total_pages' => 0,
+                        'total_items' => 0,
+                        'per_page' => $limit,
+                        'has_more' => false,
+                        'from' => null,
+                        'to' => null
+                    ]
+                ]
+            ]);
+        }
+
+        // Récupérer les posts de toutes les sous-catégories avec pagination
+        $posts = \App\Models\Post::whereIn('subcategory_id', $subcategoryIds)
+            ->where('content_status', 'published')
+            ->with([
+                'user:id,first_name,last_name,email,profile_image,bio',
+                'medias',
+                'tags',
+                'subcategory:id,name,category_id',
+                'fandom:id,name'
+            ])
+            ->withCount(['favorites', 'comments'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts
+        $formattedPosts = collect($posts->items())->map(function ($post) {
+            $user = $post->user;
+            $subcategory = $post->subcategory;
+
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'full_name' => trim($user->first_name . ' ' . $user->last_name),
+                    'email' => $user->email,
+                    'profile_image' => $user->profile_image,
+                    'bio' => $user->bio,
+                ] : null,
+                'subcategory' => $subcategory ? [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->name,
+                    'category_id' => $subcategory->category_id,
+                ] : null,
+                'fandom' => $post->fandom ? [
+                    'id' => $post->fandom->id,
+                    'name' => $post->fandom->name,
+                ] : null,
+                'media' => $post->medias ? $post->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'media_type' => $media->media_type,
+                    ];
+                })->toArray() : [],
+                'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'feedback' => $post->feedback ?? 0,
+            ];
+        });
+
+        // Formater les sous-catégories pour la réponse
+        $formattedSubcategories = $subcategories->map(function ($subcategory) {
+            return [
+                'id' => $subcategory->id,
+                'name' => $subcategory->name,
+                'description' => $subcategory->description,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'category' => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'description' => $category->description,
+                ],
+                'subcategories' => $formattedSubcategories,
+                'posts' => $formattedPosts,
+                'posts_count' => $posts->total(),
+                'pagination' => [
+                    'current_page' => $posts->currentPage(),
+                    'total_pages' => $posts->lastPage(),
+                    'total_items' => $posts->total(),
+                    'per_page' => $posts->perPage(),
+                    'has_more' => $posts->hasMorePages(),
+                    'from' => $posts->firstItem(),
+                    'to' => $posts->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+
+
+    public function getFavoritePosts(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(100, max(1, (int) $request->get('limit', 10)));
+
+        // Récupérer les favoris de type Post avec pagination
+        $favorites = Favorite::where('user_id', $user->id)
+            ->where('favoriteable_type', 'App\\Models\\Post')
+            ->with(['favoriteable.user', 'favoriteable.medias', 'favoriteable.tags'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les posts favoris
+        $formattedPosts = collect($favorites->items())->map(function ($favorite) {
+            $post = $favorite->favoriteable;
+            if (!$post) return null; // Post supprimé
+
+            return [
+                'id' => $post->id,
+                'description' => $post->description,
+                'content_status' => $post->content_status,
+                'schedule_at' => $post->schedule_at,
+                'category_id' => $post->category_id ?? null,
+                'subcategory_id' => $post->subcategory_id ?? null,
+                'fandom_id' => $post->fandom_id ?? null,
+                'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
+                'updated_at' => $post->updated_at ? $post->updated_at->toISOString() : null,
+                'favorited_at' => $favorite->created_at ? $favorite->created_at->toISOString() : null,
+                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
+                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                'user' => $post->user ? [
+                    'id' => $post->user->id,
+                    'first_name' => $post->user->first_name,
+                    'last_name' => $post->user->last_name,
+                    'profile_image' => $post->user->profile_image,
+                ] : null,
+                'likes_count' => method_exists($post, 'favorites') ? $post->favorites()->count() : 0,
+                'comments_count' => method_exists($post, 'comments') ? $post->comments()->count() : 0,
+            ];
+        })->filter(); // Supprimer les posts null
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'posts' => $formattedPosts->values(),
+                'pagination' => [
+                    'current_page' => $favorites->currentPage(),
+                    'total_pages' => $favorites->lastPage(),
+                    'total_items' => $favorites->total(),
+                    'per_page' => $favorites->perPage(),
+                    'has_more' => $favorites->hasMorePages(),
+                    'from' => $favorites->firstItem(),
+                    'to' => $favorites->lastItem()
+                ]
+            ]
+        ]);
+    }
+
+
+
+    
 
 }

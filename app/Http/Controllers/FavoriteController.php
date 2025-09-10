@@ -7,6 +7,7 @@ use App\Models\Post;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class FavoriteController extends Controller
 {
@@ -267,5 +268,186 @@ class FavoriteController extends Controller
             'favorites_count' => $favorites->count(),
             'data' => $favorites
         ]);
+    }
+
+    public function addfavoritePost($postId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found'
+            ], 404);
+        }
+
+        // Vérifier si déjà en favori
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $post->id,
+            'favoriteable_type' => 'App\\Models\\Post',
+        ])->first();
+
+        if ($existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce post est déjà dans vos favoris.'
+            ], 409);
+        }
+
+        // Créer le favori
+        Favorite::create([
+            'user_id' => $user->id,
+            'favoriteable_id' => $post->id,
+            'favoriteable_type' => 'App\\Models\\Post',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le post a été ajouté aux favoris avec succès.'
+        ], 201);
+    }
+
+
+
+
+
+    public function removefavoritePost($postId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        $post = Post::find($postId);
+        if (!$post) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Post not found'
+            ], 404);
+        }
+
+        // Vérifier si le favori existe
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $post->id,
+            'favoriteable_type' => 'App\\Models\\Post',
+        ])->first();
+
+        if (!$existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce post n\'est pas dans vos favoris.'
+            ], 404);
+        }
+
+        // Supprimer le favori
+        $existingFavorite->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le post a été retiré des favoris avec succès.'
+        ], 200);
+    }
+
+
+
+    public function addFavoriteProduct($pProductId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        // Vérifier que le produit existe
+        $product = Product::find($pProductId);
+        if (!$product) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product not found'
+            ], 404);
+        }
+
+        // Vérifier si déjà en favori
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $product->id,
+            'favoriteable_type' => 'App\\Models\\Product',
+        ])->first();
+
+        if ($existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce produit est déjà dans vos favoris.'
+            ], 409);
+        }
+
+        // Créer le favori
+        Favorite::create([
+            'user_id' => $user->id,
+            'favoriteable_id' => $product->id,
+            'favoriteable_type' => 'App\\Models\\Product',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le produit a été ajouté aux favoris avec succès.'
+        ], 201);
+    }
+
+
+public function removeFavoriteProduct($pProductId)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        // Vérifier que le produit existe
+        $product = Product::find($pProductId);
+        if (!$product) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product not found'
+            ], 404);
+        }
+
+        // Vérifier si le favori existe
+        $existingFavorite = Favorite::where([
+            'user_id' => $user->id,
+            'favoriteable_id' => $product->id,
+            'favoriteable_type' => 'App\\Models\\Product',
+        ])->first();
+
+        if (!$existingFavorite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce produit n\'est pas dans vos favoris.'
+            ], 404);
+        }
+
+        // Supprimer le favori
+        $existingFavorite->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Le produit a été retiré des favoris avec succès.'
+        ], 200);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
 use App\Models\Subcategory;
 use Illuminate\Http\Request;
 
@@ -196,6 +197,34 @@ public function getSubcategoryFandoms($subcategoryId)
         ];
 
         return response()->json($response, 200);
+    }
+
+
+
+     public function getCategorySubcategories($category_id)
+    {
+        $category = Category::find($category_id);
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        $subcategories = \App\Models\SubCategory::where('category_id', $category_id)->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'category' => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'image' => $category->image,
+                    'description' => $category->description
+                ],
+                'subcategories' => $subcategories
+            ]
+        ]);
     }
 
 }
