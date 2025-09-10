@@ -102,7 +102,6 @@ Route::post('/verifyregister', [PersonnaliseController::class, 'verifyregister']
 Route::post('/verifyOTPforgetPassword', [PersonnaliseController::class, 'verifyOTPforgetPassword']);
 
 
-
 // ====================
 // USER PROFILE
 // ====================
