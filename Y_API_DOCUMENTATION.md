@@ -361,35 +361,35 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - Authorization: Bearer {token}
 - Content-Type: multipart/form-data
 
-**Body:**
+**Request Body (multipart/form-data):**
 ```json
 {
-  "description": "Contenu du post",
-  "media": ["file1", "file2"],
-  "tags": ["tag1", "tag2"],
-  "subcategory_id": 1,
-  "fandom_id": 1
+    "description": "Nouveau trailer de Spider-Man ! Qu'est-ce que vous en pensez ?",
+    "subcategory_id": 1,
+    "content_status": "published",
+    "schedule_at": "2024-01-25T14:30:00.000000Z",
+    "medias": ["file1.jpg", "file2.mp4"],
+    "tags": ["spiderman", "marvel", "trailer"]
 }
 ```
 
-**Réponse Success (201):**
+**Response (201):**
 ```json
 {
-  "success": true,
-  "data": {
+    "message": "Post créé avec succès.",
     "post": {
-      "id": 1,
-      "description": "Contenu du post",
-      "media": ["url1", "url2"],
-      "tags": ["tag1", "tag2"],
-      "user": {
         "id": 1,
-        "first_name": "John",
-        "last_name": "Doe"
-      },
-      "created_at": "2024-01-01T00:00:00Z"
+        "body": null,
+        "subcategory_id": 1,
+        "media": [
+            "posts/images/spiderman_trailer.jpg",
+            "posts/videos/spiderman_video.mp4"
+        ],
+        "tags": ["spiderman", "marvel", "trailer"],
+        "content_status": "published",
+        "schedule_at": "2024-01-25T14:30:00.000000Z",
+        "createdAt": "2024-01-22T14:30:00.000000Z"
     }
-  }
 }
 ```
 
@@ -770,6 +770,14 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 **Paramètres URL:**
 - `fandom_id` (integer): ID du fandom
 
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "message": "Successfully left the fandom"
+}
+```
+
 ### POST `/Y/fandoms`
 **Description:** Créer un nouveau fandom
 
@@ -788,6 +796,26 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 }
 ```
 
+**Response (201):**
+```json
+{
+    "success": true,
+    "message": "Fandom créé avec succès",
+    "data": {
+        "fandom": {
+            "id": 15,
+            "name": "Nouveau Fandom",
+            "description": "Description du fandom",
+            "subcategory_id": 1,
+            "cover_image": "storage/fandom_cover_image/cover15.jpg",
+            "logo_image": "storage/fandom_logo_image/logo15.jpg",
+            "created_at": "2024-01-01T12:30:00.000000Z",
+            "updated_at": "2024-01-01T12:30:00.000000Z"
+        }
+    }
+}
+```
+
 ### POST `/Y/fandoms/{fandom_id}`
 **Description:** Mettre à jour un fandom existant
 
@@ -798,6 +826,38 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 **Paramètres URL:**
 - `fandom_id` (integer): ID du fandom
 
+**Body:**
+```json
+{
+  "name": "Nom mis à jour",
+  "description": "Description mise à jour",
+  "cover_image": "file",
+  "logo_image": "file"
+}
+```
+
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "fandom": {
+      "id": 15,
+      "name": "Nom mis à jour",
+      "description": "Description mise à jour",
+      "cover_image": "https://example.com/storage/fandoms/covers/cover15_updated.jpg",
+      "logo_image": "https://example.com/storage/fandoms/logos/logo15_updated.jpg",
+      "subcategory_id": 1,
+      "creator_id": 2,
+      "members_count": 25,
+      "posts_count": 10,
+      "created_at": "2024-01-01T12:30:00Z",
+      "updated_at": "2024-01-02T14:45:00Z"
+    }
+  }
+}
+```
+
 ### GET `/Y/users/my-fandoms`
 **Description:** Récupérer les fandoms de l'utilisateur connecté
 
@@ -807,6 +867,57 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 **Query Parameters:**
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre de fandoms par page
+
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "fandoms": [
+      {
+        "id": 1,
+        "name": "Harry Potter Fans",
+        "description": "Communauté des fans de Harry Potter",
+        "cover_image": "https://example.com/storage/fandoms/covers/hp.jpg",
+        "logo_image": "https://example.com/storage/fandoms/logos/hp_logo.jpg",
+        "members_count": 1250,
+        "posts_count": 5600,
+        "member_role": "admin",
+        "joined_at": "2024-01-01T10:00:00Z",
+        "subcategory": {
+          "id": 1,
+          "name": "Books",
+          "category_id": 1
+        }
+      },
+      {
+        "id": 3,
+        "name": "Marvel Universe",
+        "description": "Discussions sur l'univers Marvel",
+        "cover_image": "https://example.com/storage/fandoms/covers/marvel.jpg",
+        "logo_image": "https://example.com/storage/fandoms/logos/marvel_logo.jpg",
+        "members_count": 890,
+        "posts_count": 3400,
+        "member_role": "member",
+        "joined_at": "2024-01-15T14:30:00Z",
+        "subcategory": {
+          "id": 2,
+          "name": "Movies",
+          "category_id": 1
+        }
+      }
+    ],
+    "total_fandoms": 5,
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 1,
+      "total_items": 5,
+      "per_page": 10,
+      "has_more": false
+    }
+  }
+}
+```
 
 ### PUT `/Y/fandoms/{fandom_id}/members/{user_id}/role`
 **Description:** Changer le rôle d'un membre dans un fandom (admin uniquement)
@@ -826,11 +937,39 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 }
 ```
 
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "message": "Member role updated successfully",
+  "data": {
+    "member": {
+      "user_id": 5,
+      "fandom_id": 1,
+      "role": "moderator",
+      "updated_at": "2024-01-01T15:30:00Z"
+    }
+  }
+}
+```
+
 ### DELETE `/Y/fandoms/{fandom_id}/members/{user_id}`
 **Description:** Supprimer un membre d'un fandom (admin uniquement)
 
 **Headers:**
 - Authorization: Bearer {token}
+
+**Paramètres URL:**
+- `fandom_id` (integer): ID du fandom
+- `user_id` (integer): ID de l'utilisateur
+
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "message": "Member removed from fandom successfully"
+}
+```
 
 ### POST `/Y/fandoms/{fandom_id}/posts`
 **Description:** Ajouter un post à un fandom
@@ -851,8 +990,68 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 }
 ```
 
+**Réponse Success (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "post": {
+      "id": 25,
+      "description": "Contenu du post",
+      "fandom_id": 1,
+      "user_id": 2,
+      "media": ["https://example.com/storage/posts/media1.jpg", "https://example.com/storage/posts/media2.jpg"],
+      "tags": ["tag1", "tag2"],
+      "likes_count": 0,
+      "comments_count": 0,
+      "created_at": "2024-01-01T16:00:00Z"
+    }
+  }
+}
+```
+
 ### PUT `/Y/fandoms/{fandom_id}/posts/{post_id}`
 **Description:** Mettre à jour un post dans un fandom
+
+**Headers:**
+- Authorization: Bearer {token}
+- Content-Type: multipart/form-data
+
+**Paramètres URL:**
+- `fandom_id` (integer): ID du fandom
+- `post_id` (integer): ID du post
+
+**Body:**
+```json
+{
+  "description": "Contenu mis à jour",
+  "media": ["file1"],
+  "tags": ["newTag"]
+}
+```
+
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "post": {
+      "id": 25,
+      "description": "Contenu mis à jour",
+      "fandom_id": 1,
+      "user_id": 2,
+      "media": ["https://example.com/storage/posts/media_updated.jpg"],
+      "tags": ["newTag"],
+      "likes_count": 5,
+      "comments_count": 2,
+      "updated_at": "2024-01-01T17:30:00Z"
+    }
+  }
+}
+```
+
+### DELETE `/Y/fandoms/{fandom_id}/posts/{post_id}`
+**Description:** Supprimer un post d'un fandom
 
 **Headers:**
 - Authorization: Bearer {token}
@@ -861,11 +1060,13 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - `fandom_id` (integer): ID du fandom
 - `post_id` (integer): ID du post
 
-### DELETE `/Y/fandoms/{fandom_id}/posts/{post_id}`
-**Description:** Supprimer un post d'un fandom
-
-**Headers:**
-- Authorization: Bearer {token}
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "message": "Post deleted from fandom successfully"
+}
+```
 
 ### GET `/Y/fandoms`
 **Description:** Récupérer la liste des fandoms
@@ -878,6 +1079,62 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - `limit` (integer, optional): Nombre de fandoms par page
 - `category_id` (integer, optional): Filtrer par catégorie
 
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Fandoms retrieved successfully",
+    "data": {
+        "fandoms": [
+            {
+                "id": 1,
+                "name": "Marvel Cinematic Universe",
+                "description": "Fandom pour les fans de l'univers Marvel",
+                "image": "fandoms/marvel_mcu.jpg",
+                "background_image": "fandoms/marvel_background.jpg",
+                "category_id": 1,
+                "category": {
+                    "id": 1,
+                    "name": "Movies",
+                    "description": "Films et cinéma"
+                },
+                "members_count": 15420,
+                "posts_count": 8930,
+                "is_member": true,
+                "created_at": "2024-01-15T10:30:00.000000Z",
+                "updated_at": "2024-01-20T15:45:00.000000Z"
+            },
+            {
+                "id": 2,
+                "name": "One Piece",
+                "description": "Fandom pour les fans du manga One Piece",
+                "image": "fandoms/one_piece.jpg",
+                "background_image": "fandoms/one_piece_bg.jpg",
+                "category_id": 3,
+                "category": {
+                    "id": 3,
+                    "name": "Anime & Manga",
+                    "description": "Anime et manga japonais"
+                },
+                "members_count": 22100,
+                "posts_count": 12450,
+                "is_member": false,
+                "created_at": "2024-01-10T08:20:00.000000Z",
+                "updated_at": "2024-01-22T11:30:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 25,
+            "total_items": 248,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
+
 ### GET `/Y/fandoms/search`
 **Description:** Rechercher des fandoms
 
@@ -889,11 +1146,120 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre de résultats par page
 
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Search completed successfully",
+    "data": {
+        "query": "marvel",
+        "fandoms": [
+            {
+                "id": 1,
+                "name": "Marvel Cinematic Universe",
+                "description": "Fandom pour les fans de l'univers Marvel",
+                "image": "fandoms/marvel_mcu.jpg",
+                "background_image": "fandoms/marvel_background.jpg",
+                "category_id": 1,
+                "category": {
+                    "id": 1,
+                    "name": "Movies",
+                    "description": "Films et cinéma"
+                },
+                "members_count": 15420,
+                "posts_count": 8930,
+                "is_member": true,
+                "relevance_score": 0.95,
+                "created_at": "2024-01-15T10:30:00.000000Z"
+            },
+            {
+                "id": 15,
+                "name": "Marvel Comics",
+                "description": "Fandom pour les comics Marvel",
+                "image": "fandoms/marvel_comics.jpg",
+                "background_image": "fandoms/marvel_comics_bg.jpg",
+                "category_id": 4,
+                "category": {
+                    "id": 4,
+                    "name": "Comics",
+                    "description": "Bandes dessinées"
+                },
+                "members_count": 8750,
+                "posts_count": 5240,
+                "is_member": false,
+                "relevance_score": 0.89,
+                "created_at": "2024-01-12T14:15:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 3,
+            "total_items": 27,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
+
 ### GET `/Y/categories/{category_id}/fandoms`
 **Description:** Récupérer les fandoms d'une catégorie
 
 **Headers:**
 - Authorization: Bearer {token}
+
+**Query Parameters:**
+- `page` (integer, optional): Numéro de page
+- `limit` (integer, optional): Nombre de fandoms par page
+
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Category fandoms retrieved successfully",
+    "data": {
+        "category": {
+            "id": 1,
+            "name": "Movies",
+            "description": "Films et cinéma",
+            "fandoms_count": 45
+        },
+        "fandoms": [
+            {
+                "id": 1,
+                "name": "Marvel Cinematic Universe",
+                "description": "Fandom pour les fans de l'univers Marvel",
+                "image": "fandoms/marvel_mcu.jpg",
+                "background_image": "fandoms/marvel_background.jpg",
+                "members_count": 15420,
+                "posts_count": 8930,
+                "is_member": true,
+                "created_at": "2024-01-15T10:30:00.000000Z"
+            },
+            {
+                "id": 5,
+                "name": "Star Wars",
+                "description": "Fandom pour les fans de Star Wars",
+                "image": "fandoms/star_wars.jpg",
+                "background_image": "fandoms/star_wars_bg.jpg",
+                "members_count": 18930,
+                "posts_count": 11250,
+                "is_member": false,
+                "created_at": "2024-01-14T16:45:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 5,
+            "total_items": 45,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
 
 **Paramètres URL:**
 - `category_id` (integer): ID de la catégorie
@@ -911,6 +1277,78 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre de posts par page
 
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Fandom posts retrieved successfully",
+    "data": {
+        "fandom": {
+            "id": 1,
+            "name": "Marvel Cinematic Universe",
+            "image": "fandoms/marvel_mcu.jpg",
+            "members_count": 15420
+        },
+        "posts": [
+            {
+                "id": 1,
+                "description": "Nouveau trailer de Spider-Man ! Qu'est-ce que vous en pensez ?",
+                "media": [
+                    {
+                        "type": "image",
+                        "url": "posts/media/spiderman_trailer.jpg",
+                        "thumbnail": "posts/media/thumbs/spiderman_trailer_thumb.jpg"
+                    }
+                ],
+                "tags": ["spiderman", "marvel", "trailer"],
+                "user": {
+                    "id": 2,
+                    "first_name": "Jane",
+                    "last_name": "Smith",
+                    "username": "janesmith",
+                    "profile_image": "users/profiles/jane_profile.jpg",
+                    "is_verified": true
+                },
+                "likes_count": 247,
+                "comments_count": 38,
+                "is_liked": true,
+                "is_saved": false,
+                "created_at": "2024-01-22T14:30:00.000000Z",
+                "updated_at": "2024-01-22T14:30:00.000000Z"
+            },
+            {
+                "id": 25,
+                "description": "Discussion sur les prochains films Marvel Phase 5",
+                "media": [],
+                "tags": ["marvel", "phase5", "discussion"],
+                "user": {
+                    "id": 7,
+                    "first_name": "Tom",
+                    "last_name": "Wilson",
+                    "username": "tomw",
+                    "profile_image": "users/profiles/tom_profile.jpg",
+                    "is_verified": false
+                },
+                "likes_count": 89,
+                "comments_count": 23,
+                "is_liked": false,
+                "is_saved": true,
+                "created_at": "2024-01-22T10:15:00.000000Z",
+                "updated_at": "2024-01-22T10:15:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 12,
+            "total_items": 115,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
+
 ### GET `/Y/fandoms/{fandom_id}/members`
 **Description:** Récupérer les membres d'un fandom
 
@@ -919,6 +1357,75 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 
 **Paramètres URL:**
 - `fandom_id` (integer): ID du fandom
+
+**Query Parameters:**
+- `page` (integer, optional): Numéro de page
+- `limit` (integer, optional): Nombre de membres par page
+
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Fandom members retrieved successfully",
+    "data": {
+        "fandom": {
+            "id": 1,
+            "name": "Marvel Cinematic Universe",
+            "image": "fandoms/marvel_mcu.jpg",
+            "members_count": 15420
+        },
+        "members": [
+            {
+                "id": 2,
+                "first_name": "Jane",
+                "last_name": "Smith",
+                "username": "janesmith",
+                "profile_image": "users/profiles/jane_profile.jpg",
+                "background_image": "users/backgrounds/jane_bg.jpg",
+                "is_verified": true,
+                "role": "admin",
+                "joined_at": "2024-01-15T10:30:00.000000Z",
+                "posts_count": 45,
+                "is_following": true
+            },
+            {
+                "id": 5,
+                "first_name": "Mike",
+                "last_name": "Johnson",
+                "username": "mikej",
+                "profile_image": "users/profiles/mike_profile.jpg",
+                "background_image": null,
+                "is_verified": false,
+                "role": "moderator",
+                "joined_at": "2024-01-16T14:20:00.000000Z",
+                "posts_count": 23,
+                "is_following": false
+            },
+            {
+                "id": 8,
+                "first_name": "Sarah",
+                "last_name": "Chen",
+                "username": "sarahc_art",
+                "profile_image": "users/profiles/sarah_profile.jpg",
+                "background_image": "users/backgrounds/sarah_bg.jpg",
+                "is_verified": false,
+                "role": "member",
+                "joined_at": "2024-01-18T09:45:00.000000Z",
+                "posts_count": 12,
+                "is_following": true
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 154,
+            "total_items": 1542,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
 
 **Query Parameters:**
 - `page` (integer, optional): Numéro de page
@@ -934,6 +1441,69 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre de fandoms par page
 - `days` (integer, optional): Période pour le calcul trending
+
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Trending fandoms retrieved successfully",
+    "data": {
+        "period_days": 7,
+        "fandoms": [
+            {
+                "id": 1,
+                "name": "Marvel Cinematic Universe",
+                "description": "Fandom pour les fans de l'univers Marvel",
+                "image": "fandoms/marvel_mcu.jpg",
+                "background_image": "fandoms/marvel_background.jpg",
+                "category_id": 1,
+                "category": {
+                    "id": 1,
+                    "name": "Movies",
+                    "description": "Films et cinéma"
+                },
+                "members_count": 15420,
+                "posts_count": 8930,
+                "new_members_count": 347,
+                "new_posts_count": 125,
+                "trending_score": 0.94,
+                "growth_rate": 2.3,
+                "is_member": true,
+                "created_at": "2024-01-15T10:30:00.000000Z"
+            },
+            {
+                "id": 8,
+                "name": "Attack on Titan",
+                "description": "Fandom pour Shingeki no Kyojin",
+                "image": "fandoms/aot.jpg",
+                "background_image": "fandoms/aot_bg.jpg",
+                "category_id": 3,
+                "category": {
+                    "id": 3,
+                    "name": "Anime & Manga",
+                    "description": "Anime et manga japonais"
+                },
+                "members_count": 12850,
+                "posts_count": 6420,
+                "new_members_count": 289,
+                "new_posts_count": 98,
+                "trending_score": 0.87,
+                "growth_rate": 2.8,
+                "is_member": false,
+                "created_at": "2024-01-16T09:15:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 3,
+            "total_items": 25,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
 
 ---
 
@@ -980,6 +1550,90 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 ```
 
 ### GET `/Y/feed/home`
+**Description:** Récupérer le feed principal (mélange de posts populaires et des fandoms suivis)
+
+**Headers:**
+- Authorization: Bearer {token}
+
+**Query Parameters:**
+- `page` (integer, optional): Numéro de page
+- `limit` (integer, optional): Nombre de posts par page
+
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Home feed retrieved successfully",
+    "data": {
+        "posts": [
+            {
+                "id": 1,
+                "description": "Nouveau trailer de Spider-Man ! Qu'est-ce que vous en pensez ?",
+                "media": [
+                    {
+                        "type": "image",
+                        "url": "posts/media/spiderman_trailer.jpg",
+                        "thumbnail": "posts/media/thumbs/spiderman_trailer_thumb.jpg"
+                    }
+                ],
+                "tags": ["spiderman", "marvel", "trailer"],
+                "user": {
+                    "id": 2,
+                    "first_name": "Jane",
+                    "last_name": "Smith",
+                    "username": "janesmith",
+                    "profile_image": "users/profiles/jane_profile.jpg",
+                    "is_verified": true
+                },
+                "fandom": {
+                    "id": 1,
+                    "name": "Marvel Cinematic Universe",
+                    "image": "fandoms/marvel_mcu.jpg"
+                },
+                "likes_count": 247,
+                "comments_count": 38,
+                "is_liked": true,
+                "is_saved": false,
+                "created_at": "2024-01-22T14:30:00.000000Z",
+                "updated_at": "2024-01-22T14:30:00.000000Z"
+            },
+            {
+                "id": 15,
+                "description": "Discussion sur le dernier chapitre de One Piece 🏴‍☠️",
+                "media": [],
+                "tags": ["onepiece", "manga", "discussion"],
+                "user": {
+                    "id": 5,
+                    "first_name": "Mike",
+                    "last_name": "Johnson",
+                    "username": "mikej",
+                    "profile_image": "users/profiles/mike_profile.jpg",
+                    "is_verified": false
+                },
+                "fandom": {
+                    "id": 2,
+                    "name": "One Piece",
+                    "image": "fandoms/one_piece.jpg"
+                },
+                "likes_count": 89,
+                "comments_count": 12,
+                "is_liked": false,
+                "is_saved": true,
+                "created_at": "2024-01-22T11:15:00.000000Z",
+                "updated_at": "2024-01-22T11:15:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 15,
+            "total_items": 145,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
 **Description:** Récupérer le feed principal personnalisé
 
 **Headers:**
@@ -996,6 +1650,86 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - Authorization: Bearer {token}
 
 **Query Parameters:**
+- `page` (integer, optional): Numéro de page
+- `limit` (integer, optional): Nombre de posts par page
+
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Explore feed retrieved successfully",
+    "data": {
+        "posts": [
+            {
+                "id": 42,
+                "description": "Fan art incroyable de Demon Slayer ! 🗡️✨",
+                "media": [
+                    {
+                        "type": "image",
+                        "url": "posts/media/demon_slayer_fanart.jpg",
+                        "thumbnail": "posts/media/thumbs/demon_slayer_fanart_thumb.jpg"
+                    }
+                ],
+                "tags": ["demonslayer", "fanart", "anime"],
+                "user": {
+                    "id": 8,
+                    "first_name": "Sarah",
+                    "last_name": "Chen",
+                    "username": "sarahc_art",
+                    "profile_image": "users/profiles/sarah_profile.jpg",
+                    "is_verified": false
+                },
+                "fandom": {
+                    "id": 12,
+                    "name": "Demon Slayer",
+                    "image": "fandoms/demon_slayer.jpg"
+                },
+                "likes_count": 1250,
+                "comments_count": 87,
+                "is_liked": false,
+                "is_saved": false,
+                "trending_score": 0.89,
+                "created_at": "2024-01-22T09:45:00.000000Z",
+                "updated_at": "2024-01-22T09:45:00.000000Z"
+            },
+            {
+                "id": 35,
+                "description": "Théorie sur la fin de Game of Thrones. Vos avis ?",
+                "media": [],
+                "tags": ["gameofthrones", "theory", "discussion"],
+                "user": {
+                    "id": 12,
+                    "first_name": "Alex",
+                    "last_name": "Martin",
+                    "username": "alextheory",
+                    "profile_image": "users/profiles/alex_profile.jpg",
+                    "is_verified": true
+                },
+                "fandom": {
+                    "id": 6,
+                    "name": "Game of Thrones",
+                    "image": "fandoms/got.jpg"
+                },
+                "likes_count": 543,
+                "comments_count": 156,
+                "is_liked": true,
+                "is_saved": true,
+                "trending_score": 0.76,
+                "created_at": "2024-01-21T20:30:00.000000Z",
+                "updated_at": "2024-01-21T20:30:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 20,
+            "total_items": 195,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre de posts par page
 
@@ -1053,6 +1787,62 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre de résultats par page
 
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Posts search completed successfully",
+    "data": {
+        "query": "marvel",
+        "filters": {
+            "tags": ["marvel", "superhero"],
+            "subcategory_id": 1
+        },
+        "posts": [
+            {
+                "id": 1,
+                "description": "Nouveau trailer de Spider-Man ! Qu'est-ce que vous en pensez ?",
+                "media": [
+                    {
+                        "type": "image",
+                        "url": "posts/media/spiderman_trailer.jpg",
+                        "thumbnail": "posts/media/thumbs/spiderman_trailer_thumb.jpg"
+                    }
+                ],
+                "tags": ["spiderman", "marvel", "trailer"],
+                "user": {
+                    "id": 2,
+                    "first_name": "Jane",
+                    "last_name": "Smith",
+                    "username": "janesmith",
+                    "profile_image": "users/profiles/jane_profile.jpg",
+                    "is_verified": true
+                },
+                "fandom": {
+                    "id": 1,
+                    "name": "Marvel Cinematic Universe",
+                    "image": "fandoms/marvel_mcu.jpg"
+                },
+                "likes_count": 247,
+                "comments_count": 38,
+                "is_liked": true,
+                "is_saved": false,
+                "relevance_score": 0.95,
+                "created_at": "2024-01-22T14:30:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 8,
+            "total_items": 78,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
+
 ### GET `/Y/search/fandom`
 **Description:** Rechercher des fandoms
 
@@ -1062,6 +1852,64 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 **Query Parameters:**
 - `q` (string, required): Terme de recherche
 - `page` (integer, optional): Numéro de page
+- `limit` (integer, optional): Nombre de résultats par page
+
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Fandoms search completed successfully",
+    "data": {
+        "query": "marvel",
+        "fandoms": [
+            {
+                "id": 1,
+                "name": "Marvel Cinematic Universe",
+                "description": "Fandom pour les fans de l'univers Marvel",
+                "image": "fandoms/marvel_mcu.jpg",
+                "background_image": "fandoms/marvel_background.jpg",
+                "category_id": 1,
+                "category": {
+                    "id": 1,
+                    "name": "Movies",
+                    "description": "Films et cinéma"
+                },
+                "members_count": 15420,
+                "posts_count": 8930,
+                "is_member": true,
+                "relevance_score": 0.95,
+                "created_at": "2024-01-15T10:30:00.000000Z"
+            },
+            {
+                "id": 15,
+                "name": "Marvel Comics",
+                "description": "Fandom pour les comics Marvel",
+                "image": "fandoms/marvel_comics.jpg",
+                "background_image": "fandoms/marvel_comics_bg.jpg",
+                "category_id": 4,
+                "category": {
+                    "id": 4,
+                    "name": "Comics",
+                    "description": "Bandes dessinées"
+                },
+                "members_count": 8750,
+                "posts_count": 5240,
+                "is_member": false,
+                "relevance_score": 0.89,
+                "created_at": "2024-01-12T14:15:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 3,
+            "total_items": 27,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
 - `limit` (integer, optional): Nombre de résultats par page
 
 ---
@@ -1148,6 +1996,64 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre d'éléments par page
 
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Subcategory content retrieved successfully",
+    "data": {
+        "subcategory": {
+            "id": 1,
+            "name": "Movies",
+            "description": "Films et cinéma",
+            "category": {
+                "id": 1,
+                "name": "Entertainment",
+                "description": "Divertissement"
+            }
+        },
+        "content": {
+            "fandoms": [
+                {
+                    "id": 1,
+                    "name": "Marvel Cinematic Universe",
+                    "image": "fandoms/marvel_mcu.jpg",
+                    "members_count": 15420,
+                    "posts_count": 8930
+                }
+            ],
+            "posts": [
+                {
+                    "id": 1,
+                    "description": "Nouveau trailer de Spider-Man !",
+                    "user": {
+                        "id": 2,
+                        "first_name": "Jane",
+                        "last_name": "Smith",
+                        "username": "janesmith"
+                    },
+                    "likes_count": 247,
+                    "comments_count": 38
+                }
+            ]
+        },
+        "statistics": {
+            "total_fandoms": 25,
+            "total_posts": 1543,
+            "active_members": 8940
+        },
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 15,
+            "total_items": 150,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
+
 ### GET `/Y/subcategories/{subcategory_id}/fandoms`
 **Description:** Récupérer les fandoms d'une sous-catégorie
 
@@ -1156,6 +2062,62 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 
 **Paramètres URL:**
 - `subcategory_id` (integer): ID de la sous-catégorie
+
+**Query Parameters:**
+- `page` (integer, optional): Numéro de page
+- `limit` (integer, optional): Nombre de fandoms par page
+
+**Response (200):**
+```json
+{
+    "status": "success",
+    "message": "Subcategory fandoms retrieved successfully",
+    "data": {
+        "subcategory": {
+            "id": 1,
+            "name": "Movies",
+            "description": "Films et cinéma",
+            "category": {
+                "id": 1,
+                "name": "Entertainment",
+                "description": "Divertissement"
+            }
+        },
+        "fandoms": [
+            {
+                "id": 1,
+                "name": "Marvel Cinematic Universe",
+                "description": "Fandom pour les fans de l'univers Marvel",
+                "image": "fandoms/marvel_mcu.jpg",
+                "background_image": "fandoms/marvel_background.jpg",
+                "members_count": 15420,
+                "posts_count": 8930,
+                "is_member": true,
+                "created_at": "2024-01-15T10:30:00.000000Z"
+            },
+            {
+                "id": 5,
+                "name": "Star Wars",
+                "description": "Fandom pour les fans de Star Wars",
+                "image": "fandoms/star_wars.jpg",
+                "background_image": "fandoms/star_wars_bg.jpg",
+                "members_count": 18930,
+                "posts_count": 11250,
+                "is_member": false,
+                "created_at": "2024-01-14T16:45:00.000000Z"
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "total_pages": 3,
+            "total_items": 25,
+            "per_page": 10,
+            "has_next": true,
+            "has_previous": false
+        }
+    }
+}
+```
 
 ---
 
