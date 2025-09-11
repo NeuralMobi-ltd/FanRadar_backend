@@ -191,6 +191,35 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 **Paramètres URL:**
 - `userId` (integer): ID de l'utilisateur
 
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 1,
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john@example.com",
+      "profile_image": "https://example.com/storage/users/profiles/profile.jpg",
+      "background_image": "https://example.com/storage/users/backgrounds/bg.jpg",
+      "bio": "Passionné de technologie et fan de Harry Potter",
+      "date_naissance": "1990-05-15",
+      "gender": "male",
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_following": false,
+      "is_followed_by": false,
+      "stats": {
+        "followers": 150,
+        "following": 75,
+        "posts": 42,
+        "fandoms": 8
+      }
+    }
+  }
+}
+```
+
 ### POST `/Y/users/{userId}/follow`
 **Description:** Suivre un utilisateur
 
@@ -217,6 +246,14 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 **Paramètres URL:**
 - `userId` (integer): ID de l'utilisateur
 
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "message": "User unfollowed successfully"
+}
+```
+
 ### GET `/Y/users/{userId}/followers`
 **Description:** Récupérer la liste des followers d'un utilisateur
 
@@ -227,11 +264,91 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre d'éléments par page
 
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": 1,
+    "followers": [
+      {
+        "id": 2,
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "profile_image": "https://example.com/storage/users/profiles/jane.jpg",
+        "bio": "Designer graphique",
+        "is_following": true,
+        "followed_at": "2024-01-15T10:30:00Z"
+      },
+      {
+        "id": 3,
+        "first_name": "Mike",
+        "last_name": "Johnson",
+        "profile_image": "https://example.com/storage/users/profiles/mike.jpg",
+        "bio": "Développeur web",
+        "is_following": false,
+        "followed_at": "2024-01-20T14:45:00Z"
+      }
+    ],
+    "followers_count": 150,
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 15,
+      "total_items": 150,
+      "per_page": 10,
+      "has_more": true
+    }
+  }
+}
+```
+
 ### GET `/Y/users/{userId}/following`
 **Description:** Récupérer la liste des utilisateurs suivis
 
 **Headers:**
 - Authorization: Bearer {token}
+
+**Query Parameters:**
+- `page` (integer, optional): Numéro de page
+- `limit` (integer, optional): Nombre d'éléments par page
+
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": 1,
+    "following": [
+      {
+        "id": 4,
+        "first_name": "Alice",
+        "last_name": "Brown",
+        "profile_image": "https://example.com/storage/users/profiles/alice.jpg",
+        "bio": "Artiste et illustratrice",
+        "is_followed_by": true,
+        "following_since": "2024-01-10T09:15:00Z"
+      },
+      {
+        "id": 5,
+        "first_name": "Bob",
+        "last_name": "Wilson",
+        "profile_image": "https://example.com/storage/users/profiles/bob.jpg",
+        "bio": "Photographe",
+        "is_followed_by": false,
+        "following_since": "2024-01-25T16:20:00Z"
+      }
+    ],
+    "following_count": 75,
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 8,
+      "total_items": 75,
+      "per_page": 10,
+      "has_more": true
+    }
+  }
+}
+```
 
 ---
 
@@ -304,6 +421,14 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 **Paramètres URL:**
 - `postId` (integer): ID du post
 
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "message": "Post deleted successfully"
+}
+```
+
 ### POST `/Y/posts/{postId}/comments`
 **Description:** Ajouter un commentaire à un post
 
@@ -318,6 +443,28 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 ```json
 {
   "content": "Mon commentaire"
+}
+```
+
+**Réponse Success (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "comment": {
+      "id": 15,
+      "content": "Mon commentaire",
+      "post_id": 1,
+      "user": {
+        "id": 2,
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "profile_image": "https://example.com/storage/users/profiles/jane.jpg"
+      },
+      "created_at": "2024-01-01T12:30:00Z",
+      "updated_at": "2024-01-01T12:30:00Z"
+    }
+  }
 }
 ```
 
@@ -374,6 +521,22 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 }
 ```
 
+**Réponse Success (201):**
+```json
+{
+  "success": true,
+  "message": "Post saved successfully",
+  "data": {
+    "saved_post": {
+      "id": 1,
+      "post_id": 1,
+      "user_id": 2,
+      "saved_at": "2024-01-01T12:30:00Z"
+    }
+  }
+}
+```
+
 ### POST `/Y/posts/unsave`
 **Description:** Retirer un post des sauvegardés
 
@@ -388,6 +551,14 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 }
 ```
 
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "message": "Post removed from saved posts successfully"
+}
+```
+
 ### GET `/Y/posts/savedPosts`
 **Description:** Récupérer les posts sauvegardés de l'utilisateur
 
@@ -397,6 +568,40 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 **Query Parameters:**
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre de posts par page
+
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "saved_posts": [
+      {
+        "id": 1,
+        "description": "Post intéressant que j'ai sauvegardé",
+        "media": ["https://example.com/storage/posts/image1.jpg"],
+        "tags": ["interesting", "saved"],
+        "user": {
+          "id": 3,
+          "first_name": "Alice",
+          "last_name": "Brown",
+          "profile_image": "https://example.com/storage/users/profiles/alice.jpg"
+        },
+        "likes_count": 25,
+        "comments_count": 8,
+        "saved_at": "2024-01-15T10:30:00Z",
+        "created_at": "2024-01-10T09:15:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 5,
+      "total_items": 45,
+      "per_page": 10,
+      "has_more": true
+    }
+  }
+}
+```
 
 ### GET `/Y/posts/trending/top`
 **Description:** Récupérer les posts trending
@@ -408,6 +613,38 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre de posts par page
 - `days` (integer, optional): Nombre de jours pour le calcul trending (défaut: 7)
+
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "posts": [
+      {
+        "id": 1,
+        "description": "Post viral du moment",
+        "media": ["https://example.com/storage/posts/trending1.jpg"],
+        "tags": ["viral", "trending"],
+        "user": {
+          "id": 5,
+          "first_name": "Emma",
+          "last_name": "Watson",
+          "profile_image": "https://example.com/storage/users/profiles/emma.jpg"
+        },
+        "likes_count": 1250,
+        "comments_count": 89,
+        "trend_score": 95,
+        "created_at": "2024-01-01T08:00:00Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "hasNext": false
+    }
+  }
+}
+```
 
 ### GET `/Y/categories/{category_id}/posts`
 **Description:** Récupérer tous les posts d'une catégorie
@@ -421,6 +658,57 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
 **Query Parameters:**
 - `page` (integer, optional): Numéro de page
 - `limit` (integer, optional): Nombre de posts par page
+
+**Réponse Success (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "category": {
+      "id": 1,
+      "name": "Entertainment",
+      "description": "Divertissement et culture"
+    },
+    "subcategories": [
+      {
+        "id": 1,
+        "name": "Movies",
+        "description": "Films et cinéma"
+      }
+    ],
+    "posts": [
+      {
+        "id": 1,
+        "description": "Discussion sur le dernier film Marvel",
+        "media": ["https://example.com/storage/posts/marvel.jpg"],
+        "tags": ["marvel", "movies"],
+        "user": {
+          "id": 3,
+          "first_name": "John",
+          "last_name": "Doe",
+          "profile_image": "https://example.com/storage/users/profiles/john.jpg"
+        },
+        "subcategory": {
+          "id": 1,
+          "name": "Movies",
+          "category_id": 1
+        },
+        "likes_count": 45,
+        "comments_count": 12,
+        "created_at": "2024-01-01T14:30:00Z"
+      }
+    ],
+    "posts_count": 150,
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 15,
+      "total_items": 150,
+      "per_page": 10,
+      "has_more": true
+    }
+  }
+}
+```
 
 ---
 
