@@ -3,6 +3,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 
 class M_Controller extends Controller
@@ -116,24 +117,43 @@ class M_Controller extends Controller
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             // Champs optionnels
-            'profile_image' => 'nullable|string|max:500',
-            'background_image' => 'nullable|string|max:500',
+            'profile_image' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:2048',
+            'background_image' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:2048',
             'date_naissance' => 'nullable|date',
             'bio' => 'nullable|string|max:1000',
             'gender' => 'nullable|string|in:male,female,other',
             'role' => 'nullable|in:user,admin,writer',
         ]);
 
+        // Traitement de l'image de profil
+        $profileImagePath = null;
+        if ($request->hasFile('profile_image')) {
+            $profileImage = $request->file('profile_image');
+            $profileImageName = time() . '_profile_' . $profileImage->getClientOriginalName();
+            $profileImagePath = $profileImage->storeAs('users/profiles', $profileImageName, 'public');
+            $profileImagePath = asset('storage/' . $profileImagePath);
+        }
+
+        // Traitement de l'image de fond
+        $backgroundImagePath = null;
+        if ($request->hasFile('background_image')) {
+            $backgroundImage = $request->file('background_image');
+            $backgroundImageName = time() . '_background_' . $backgroundImage->getClientOriginalName();
+            $backgroundImagePath = $backgroundImage->storeAs('users/backgrounds', $backgroundImageName, 'public');
+            $backgroundImagePath = asset('storage/' . $backgroundImagePath);
+        }
+
         $user = \App\Models\User::create([
             'email' => $request->email,
             'password' => bcrypt($request->password),
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
-            'profile_image' => $request->profile_image,
-            'background_image' => $request->background_image,
+            'profile_image' => $profileImagePath,
+            'background_image' => $backgroundImagePath,
             'date_naissance' => $request->date_naissance,
             'bio' => $request->bio,
             'gender' => $request->gender,
+            'is_verified' => true,
         ]);
 
         // Assigner le rôle avec Spatie Permissions
@@ -167,14 +187,44 @@ class M_Controller extends Controller
             'password' => 'nullable|string|min:6',
             'first_name' => 'nullable|string|max:255',
             'last_name' => 'nullable|string|max:255',
+            'profile_image' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:2048',
+            'background_image' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:2048',
             'date_naissance' => 'nullable|date',
             'bio' => 'nullable|string|max:1000',
             'gender' => 'nullable|string|in:male,female,other',
             'role' => 'nullable|in:user,admin,writer',
         ]);
 
-        // Met à jour tous les champs envoyés dans la requête
-        $updatable = ['first_name', 'last_name', 'email', 'profile_image', 'background_image', 'date_naissance', 'bio', 'gender'];
+        // Traitement de l'image de profil
+        if ($request->hasFile('profile_image')) {
+            // Supprimer l'ancienne image si elle existe
+            if ($user->profile_image) {
+                $oldPath = str_replace(asset('storage/'), '', $user->profile_image);
+                Storage::disk('public')->delete($oldPath);
+            }
+
+            $profileImage = $request->file('profile_image');
+            $profileImageName = time() . '_profile_' . $profileImage->getClientOriginalName();
+            $profileImagePath = $profileImage->storeAs('users/profiles', $profileImageName, 'public');
+            $user->profile_image = asset('storage/' . $profileImagePath);
+        }
+
+        // Traitement de l'image de fond
+        if ($request->hasFile('background_image')) {
+            // Supprimer l'ancienne image si elle existe
+            if ($user->background_image) {
+                $oldPath = str_replace(asset('storage/'), '', $user->background_image);
+                Storage::disk('public')->delete($oldPath);
+            }
+
+            $backgroundImage = $request->file('background_image');
+            $backgroundImageName = time() . '_background_' . $backgroundImage->getClientOriginalName();
+            $backgroundImagePath = $backgroundImage->storeAs('users/backgrounds', $backgroundImageName, 'public');
+            $user->background_image = asset('storage/' . $backgroundImagePath);
+        }
+
+        // Met à jour les autres champs envoyés dans la requête
+        $updatable = ['first_name', 'last_name', 'email', 'date_naissance', 'bio', 'gender'];
         foreach ($updatable as $field) {
             if ($request->has($field)) {
                 $user->$field = $request->$field;
