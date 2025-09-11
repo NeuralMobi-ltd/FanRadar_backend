@@ -158,7 +158,7 @@ class PostController extends Controller
 
             'schedule_at' => 'nullable|date',
             'description' => 'nullable|string',
-        'subcategory_id' => 'nullable|integer|exists:subcategories,id',
+            'subcategory_id' => 'nullable|integer|exists:subcategories,id',
             'content_status' => 'required|in:draft,published,archived',
             'medias' => 'nullable|array',
             'medias.*' => 'file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
@@ -1102,6 +1102,6 @@ public function getHomeFeed(Request $request)
 
 
 
-    
+
 
 }
