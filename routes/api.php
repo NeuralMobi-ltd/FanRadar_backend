@@ -202,6 +202,8 @@ Route::get('Y/search/users', [UserController::class, 'searchUsers']);
 Route::get('Y/search/posts', [PostController::class, 'searchPosts']);
 // Search fandoms by name and description with pagination
 Route::get('Y/search/fandom', [FandomController::class, 'searchFandomsPaginated']);
+// Search products by name and description with pagination
+Route::get('Y/search/products', [ProductController::class, 'searchProducts']);
 
 
 Route::get('Y/subcategories/{subcategory}/content', [SubcategoryController::class, 'getSubcategoryContent']);
