@@ -114,87 +114,9 @@ class PersonnaliseController extends Controller
 
 
 
-    public function followUser($userId) {
-        $authUser = Auth::user();
-        if (!$authUser) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 401);
-        }
 
-        $followerId = $authUser->id;
 
-        // Vérifier que l'utilisateur à suivre existe
-        $userToFollow = User::find($userId);
-        if (!$userToFollow) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not found'
-            ], 404);
-        }
 
-        // Empêcher qu'un utilisateur se suive lui-même
-        if ($followerId == $userId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You cannot follow yourself'
-            ], 400);
-        }
-
-        // Vérifier si la relation existe déjà
-        $existingFollow = \App\Models\Follow::where([
-            'follower_id' => $followerId,
-            'following_id' => $userId,
-        ])->first();
-
-        if ($existingFollow) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Already following this user'
-            ], 409);
-        }
-
-        // Créer la relation de follow
-        \App\Models\Follow::create([
-            'follower_id' => $followerId,
-            'following_id' => $userId,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'User followed successfully'
-        ], 201);
-    }
-
-    public function unfollowUser($userId) {
-        $authUser = Auth::user();
-        if (!$authUser) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
-
-        $followerId = $authUser->id;
-
-        // Vérifier que l'utilisateur existe
-        $userToUnfollow = User::find($userId);
-        if (!$userToUnfollow) {
-            return response()->json(['success' => false, 'message' => 'User not found'], 404);
-        }
-
-        // Supprimer la relation si elle existe
-        $existingFollow = \App\Models\Follow::where([
-            'follower_id' => $followerId,
-            'following_id' => $userId,
-        ])->first();
-
-        if (!$existingFollow) {
-            return response()->json(['success' => false, 'message' => 'Not following this user'], 409);
-        }
-
-        $existingFollow->delete();
-
-        return response()->json(['success' => true, 'message' => 'User unfollowed successfully'], 200);
-    }
 
 
 
