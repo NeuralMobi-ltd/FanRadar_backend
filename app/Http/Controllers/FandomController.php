@@ -853,8 +853,8 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
     {
         $user = Auth::user();
 
-        // Charger la relation subcategory et le nombre de posts/members pour éviter les N+1
-        $fandoms = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members'])->get();
+        // Charger la relation subcategory avec sa category et le nombre de posts/members pour éviter les N+1
+        $fandoms = \App\Models\Fandom::with(['subcategory.category'])->withCount(['posts', 'members'])->get();
 
         // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
         $userMemberships = [];
@@ -877,12 +877,19 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
             $attrs['is_member'] = isset($userMemberships[$f->id]);
             $attrs['member_role'] = $userMemberships[$f->id] ?? null;
 
-            // réduire la sous-catégorie à id/name pour éviter de renvoyer trop de données
+            // réduire la sous-catégorie à id/name et ajouter la catégorie pour éviter de renvoyer trop de données
             if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
+                $category = $attrs['subcategory']['category'] ?? null;
                 $attrs['subcategory'] = [
                     'id' => $attrs['subcategory']['id'] ?? null,
                     'name' => $attrs['subcategory']['name'] ?? null,
                 ];
+                $attrs['category'] = $category ? [
+                    'id' => $category['id'] ?? null,
+                    'name' => $category['name'] ?? null,
+                    'image' => $category['image'] ?? null,
+                    'description' => $category['description'] ?? null,
+                ] : null;
             }
 
             return $attrs;
