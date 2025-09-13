@@ -393,4 +393,107 @@ class ProductController extends Controller
             ]
         ]);
     }
+
+    /**
+     * Rechercher des produits par nom et description
+     * Route: GET /api/Y/search/products
+     */
+    public function searchProducts(Request $request)
+    {
+        $query = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 10);
+
+        // Valider les paramètres
+        if (empty($query)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Search query is required'
+            ], 400);
+        }
+
+        if ($perPage > 50) {
+            $perPage = 50; // Limiter à 50 résultats par page maximum
+        }
+
+        $user = Auth::user();
+
+        // Recherche dans les produits par nom et description
+        $products = Product::where(function($q) use ($query) {
+                $q->where('product_name', 'LIKE', "%{$query}%")
+                  ->orWhere('description', 'LIKE', "%{$query}%");
+            })
+            ->where('content_status', 'published') // Seulement les produits publiés
+            ->with(['medias', 'subcategory:id,name', 'tags'])
+            ->withCount(['ratings' => function($ratingQuery) {
+                $ratingQuery->where('rateable_type', Product::class);
+            }])
+            ->withAvg(['ratings' => function($ratingQuery) {
+                $ratingQuery->where('rateable_type', Product::class);
+            }], 'evaluation')
+            ->orderBy('product_name', 'asc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Formater les données des produits
+        $formattedProducts = $products->getCollection()->map(function ($product) use ($user) {
+            // Vérifier si le produit est dans les favoris de l'utilisateur
+            $isFavorite = false;
+            if ($user) {
+                $isFavorite = Favorite::where([
+                    'user_id' => $user->id,
+                    'favoriteable_id' => $product->id,
+                    'favoriteable_type' => Product::class,
+                ])->exists();
+            }
+
+            return [
+                'id' => $product->id,
+                'product_name' => $product->product_name,
+                'description' => $product->description,
+                'price' => $product->price,
+                'promotion' => $product->promotion,
+                'stock' => $product->stock,
+                'content_status' => $product->content_status,
+                'type' => $product->type,
+                'revenue' => $product->revenue,
+                'subcategory' => $product->subcategory ? [
+                    'id' => $product->subcategory->id,
+                    'name' => $product->subcategory->name,
+                ] : null,
+                'media' => $product->medias ? $product->medias->map(function($media) {
+                    return [
+                        'id' => $media->id,
+                        'file_path' => $media->file_path,
+                        'media_type' => $media->media_type,
+                    ];
+                })->toArray() : [],
+                'tags' => $product->tags ? $product->tags->pluck('tag_name')->toArray() : [],
+                'average_rating' => $product->ratings_avg_evaluation ? round($product->ratings_avg_evaluation, 1) : 0,
+                'ratings_count' => $product->ratings_count ?? 0,
+                'is_favorite' => $isFavorite,
+                'sale_start_date' => $product->sale_start_date,
+                'sale_end_date' => $product->sale_end_date,
+                'created_at' => $product->created_at,
+                'updated_at' => $product->updated_at,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'query' => $query,
+                'products' => $formattedProducts,
+                'pagination' => [
+                    'current_page' => $products->currentPage(),
+                    'total_pages' => $products->lastPage(),
+                    'total_items' => $products->total(),
+                    'per_page' => $products->perPage(),
+                    'has_next' => $products->hasMorePages(),
+                    'has_previous' => $products->currentPage() > 1,
+                    'from' => $products->firstItem(),
+                    'to' => $products->lastItem()
+                ]
+            ]
+        ]);
+    }
 }
