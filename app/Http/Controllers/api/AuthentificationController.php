@@ -28,6 +28,13 @@ class AuthentificationController extends Controller
                     ], 401);
                 }
 
+                // Vérifier si le compte est vérifié
+                if (!$user->is_verified) {
+                    return response()->json([
+                        'message' => 'Votre compte n\'est pas encore vérifié. Veuillez vérifier votre email avec le code OTP reçu.'
+                    ], 403);
+                }
+
                 // Créer un token avec Sanctum
                 $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -85,6 +92,17 @@ public function loginUser(Request $request)
                     'message' => 'Email ou mot de passe invalide'
                 ]
             ], 401);
+        }
+
+        // Vérifier si le compte est vérifié
+        if (!$user->is_verified) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'ACCOUNT_NOT_VERIFIED',
+                    'message' => 'Votre compte n\'est pas encore vérifié. Veuillez vérifier votre email avec le code OTP reçu.'
+                ]
+            ], 403);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -145,6 +163,7 @@ public function loginUser(Request $request)
             'last_name' => 'required|string|max:255',
             'email' => 'required|string|email',
             'password' => 'required|string|min:6',
+            'profile_image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             'date_naissance' => 'nullable|date',
             'gender' => 'nullable|in:male,female,other',
             'bio' => 'nullable|string|max:2000',
@@ -174,6 +193,13 @@ public function loginUser(Request $request)
 
         // Générer un OTP pour la vérification
         $otp = rand(100000, 999999);
+
+        // Traitement de l'image si elle est envoyée
+        $profileImagePath = null;
+        if ($request->hasFile('profile_image')) {
+            $path = $request->file('profile_image')->store('profile', 'public');
+            $profileImagePath = 'storage/' . $path;
+        }
 
         $user = User::create([
             'first_name' => $request->first_name,
@@ -237,10 +263,11 @@ public function loginUser(Request $request)
                 }
 
                 // Traitement de l'image si elle est envoyée
-                /*$profileImagePath = null;
+                $profileImagePath = null;
                 if ($request->hasFile('profile_image')) {
-                    $profileImagePath = $request->file('profile_image')->store('profile_images', 'public');
-                }*/
+                    $path = $request->file('profile_image')->store('profile', 'public');
+                    $profileImagePath = 'storage/' . $path;
+                }
 
                 // Création de l'utilisateur
                 $user = User::create([
