@@ -98,7 +98,7 @@ class UserController extends Controller
         if ($request->hasFile('background_image')) {
             $file = $request->file('background_image');
             if ($file->isValid()) {
-                $path = $file->store('backgroundprofile', 'public');
+                $path = $file->store('profile', 'public');
                 $updateData['background_image'] = 'storage/' . $path;
             }
         }

@@ -324,7 +324,7 @@ class PersonnaliseController extends Controller
         }
 
         $path = $file->store('uploads', 'public');
-        $url = asset('storage/' . $path);
+        $url = 'storage/' . $path;
 
         return response()->json([
             'success' => true,

@@ -130,8 +130,8 @@ class M_Controller extends Controller
         if ($request->hasFile('profile_image')) {
             $profileImage = $request->file('profile_image');
             $profileImageName = time() . '_profile_' . $profileImage->getClientOriginalName();
-            $profileImagePath = $profileImage->storeAs('users/profiles', $profileImageName, 'public');
-            $profileImagePath = asset('storage/' . $profileImagePath);
+            $profileImagePath = $profileImage->storeAs('profile', $profileImageName, 'public');
+            $profileImagePath = 'storage/' . $profileImagePath;
         }
 
         // Traitement de l'image de fond
@@ -139,8 +139,8 @@ class M_Controller extends Controller
         if ($request->hasFile('background_image')) {
             $backgroundImage = $request->file('background_image');
             $backgroundImageName = time() . '_background_' . $backgroundImage->getClientOriginalName();
-            $backgroundImagePath = $backgroundImage->storeAs('users/backgrounds', $backgroundImageName, 'public');
-            $backgroundImagePath = asset('storage/' . $backgroundImagePath);
+            $backgroundImagePath = $backgroundImage->storeAs('profile', $backgroundImageName, 'public');
+            $backgroundImagePath = 'storage/' . $backgroundImagePath;
         }
 
         $user = \App\Models\User::create([
@@ -199,28 +199,28 @@ class M_Controller extends Controller
         if ($request->hasFile('profile_image')) {
             // Supprimer l'ancienne image si elle existe
             if ($user->profile_image) {
-                $oldPath = str_replace(asset('storage/'), '', $user->profile_image);
+                $oldPath = str_replace('storage/', '', $user->profile_image);
                 Storage::disk('public')->delete($oldPath);
             }
 
             $profileImage = $request->file('profile_image');
             $profileImageName = time() . '_profile_' . $profileImage->getClientOriginalName();
-            $profileImagePath = $profileImage->storeAs('users/profiles', $profileImageName, 'public');
-            $user->profile_image = asset('storage/' . $profileImagePath);
+            $profileImagePath = $profileImage->storeAs('profile', $profileImageName, 'public');
+            $user->profile_image = 'storage/' . $profileImagePath;
         }
 
         // Traitement de l'image de fond
         if ($request->hasFile('background_image')) {
             // Supprimer l'ancienne image si elle existe
             if ($user->background_image) {
-                $oldPath = str_replace(asset('storage/'), '', $user->background_image);
+                $oldPath = str_replace('storage/', '', $user->background_image);
                 Storage::disk('public')->delete($oldPath);
             }
 
             $backgroundImage = $request->file('background_image');
             $backgroundImageName = time() . '_background_' . $backgroundImage->getClientOriginalName();
-            $backgroundImagePath = $backgroundImage->storeAs('users/backgrounds', $backgroundImageName, 'public');
-            $user->background_image = asset('storage/' . $backgroundImagePath);
+            $backgroundImagePath = $backgroundImage->storeAs('profile', $backgroundImageName, 'public');
+            $user->background_image = 'storage/' . $backgroundImagePath;
         }
 
         // Met à jour les autres champs envoyés dans la requête
@@ -417,7 +417,7 @@ class M_Controller extends Controller
             foreach ($files as $file) {
                 if ($file && $file->isValid()) {
                     $path = $file->store('images', 'public');
-                    $mediaUrls[] = asset('storage/' . $path);
+                    $mediaUrls[] = 'storage/' . $path;
                 }
             }
         }

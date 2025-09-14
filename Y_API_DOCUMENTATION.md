@@ -201,8 +201,8 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
       "first_name": "John",
       "last_name": "Doe",
       "email": "john@example.com",
-      "profile_image": "https://example.com/storage/users/profiles/profile.jpg",
-      "background_image": "https://example.com/storage/users/backgrounds/bg.jpg",
+      "profile_image": "https://example.com/storage/profile/profile.jpg",
+      "background_image": "https://example.com/storage/profile/bg.jpg",
       "bio": "Passionné de technologie et fan de Harry Potter",
       "date_naissance": "1990-05-15",
       "gender": "male",
@@ -275,7 +275,7 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
         "id": 2,
         "first_name": "Jane",
         "last_name": "Smith",
-        "profile_image": "https://example.com/storage/users/profiles/jane.jpg",
+        "profile_image": "https://example.com/storage/profile/jane.jpg",
         "bio": "Designer graphique",
         "is_following": true,
         "followed_at": "2024-01-15T10:30:00Z"
@@ -284,7 +284,7 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
         "id": 3,
         "first_name": "Mike",
         "last_name": "Johnson",
-        "profile_image": "https://example.com/storage/users/profiles/mike.jpg",
+        "profile_image": "https://example.com/storage/profile/mike.jpg",
         "bio": "Développeur web",
         "is_following": false,
         "followed_at": "2024-01-20T14:45:00Z"
@@ -323,7 +323,7 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
         "id": 4,
         "first_name": "Alice",
         "last_name": "Brown",
-        "profile_image": "https://example.com/storage/users/profiles/alice.jpg",
+        "profile_image": "https://example.com/storage/profile/alice.jpg",
         "bio": "Artiste et illustratrice",
         "is_followed_by": true,
         "following_since": "2024-01-10T09:15:00Z"
@@ -332,7 +332,7 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
         "id": 5,
         "first_name": "Bob",
         "last_name": "Wilson",
-        "profile_image": "https://example.com/storage/users/profiles/bob.jpg",
+        "profile_image": "https://example.com/storage/profile/bob.jpg",
         "bio": "Photographe",
         "is_followed_by": false,
         "following_since": "2024-01-25T16:20:00Z"
@@ -459,7 +459,7 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
         "id": 2,
         "first_name": "Jane",
         "last_name": "Smith",
-        "profile_image": "https://example.com/storage/users/profiles/jane.jpg"
+        "profile_image": "https://example.com/storage/profile/jane.jpg"
       },
       "created_at": "2024-01-01T12:30:00Z",
       "updated_at": "2024-01-01T12:30:00Z"
@@ -584,7 +584,7 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
           "id": 3,
           "first_name": "Alice",
           "last_name": "Brown",
-          "profile_image": "https://example.com/storage/users/profiles/alice.jpg"
+          "profile_image": "https://example.com/storage/profile/alice.jpg"
         },
         "likes_count": 25,
         "comments_count": 8,
@@ -629,7 +629,7 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
           "id": 5,
           "first_name": "Emma",
           "last_name": "Watson",
-          "profile_image": "https://example.com/storage/users/profiles/emma.jpg"
+          "profile_image": "https://example.com/storage/profile/emma.jpg"
         },
         "likes_count": 1250,
         "comments_count": 89,
@@ -686,7 +686,7 @@ Cette documentation couvre tous les endpoints API qui commencent par "Y/" dans l
           "id": 3,
           "first_name": "John",
           "last_name": "Doe",
-          "profile_image": "https://example.com/storage/users/profiles/john.jpg"
+          "profile_image": "https://example.com/storage/profile/john.jpg"
         },
         "subcategory": {
           "id": 1,
