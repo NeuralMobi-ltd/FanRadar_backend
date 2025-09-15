@@ -223,16 +223,16 @@ class M_Controller extends Controller
             $user->background_image = 'storage/' . $backgroundImagePath;
         }
 
-        // Met à jour les autres champs envoyés dans la requête
+        // Met à jour les autres champs envoyés dans la requête (SANS les images)
         $updatable = ['first_name', 'last_name', 'email', 'date_naissance', 'bio', 'gender'];
         foreach ($updatable as $field) {
-            if ($request->has($field)) {
+            if ($request->filled($field)) {
                 $user->$field = $request->$field;
             }
         }
 
         // Gérer le mot de passe séparément
-        if ($request->has('password')) {
+        if ($request->filled('password')) {
             $user->password = bcrypt($request->password);
         }
 

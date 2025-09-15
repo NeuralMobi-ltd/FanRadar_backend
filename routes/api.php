@@ -328,7 +328,7 @@ Route::get('/roles-permissions', [\App\Http\Controllers\api\M_Controller::class,
 Route::get('/users', [\App\Http\Controllers\api\M_Controller::class, 'getAllUsers']);
 Route::get('/user/{value}', [\App\Http\Controllers\api\M_Controller::class, 'getUser']);
 Route::post('/users', [\App\Http\Controllers\api\M_Controller::class, 'addUser']);
-Route::put('/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateUser']);
+Route::post('/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateUser']);
 
 // ====================
 // CATEGORY & SUBCATEGORY MANAGEMENT (M_Controller)
