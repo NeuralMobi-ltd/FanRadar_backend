@@ -179,13 +179,25 @@ class UserController extends Controller
         $userProfile['followers_count'] = $followersCount;
         $userProfile['following_count'] = $followingCount;
 
-        // Récupérer les posts de l'utilisateur
+        // Récupérer les posts de l'utilisateur avec les compteurs
         $posts = Post::where('user_id', $userId)
             ->with(['medias', 'tags'])
+            ->withCount(['favorites', 'comments'])
             ->latest()
             ->get();
 
         $formattedPosts = $posts->map(function ($post) {
+            // Vérifier si le post est en favoris pour l'utilisateur authentifié
+            $authUser = Auth::user();
+            $isFavorite = false;
+            if ($authUser) {
+                $isFavorite = \App\Models\Favorite::where([
+                    'user_id' => $authUser->id,
+                    'favoriteable_type' => 'App\\Models\\Post',
+                    'favoriteable_id' => $post->id
+                ])->exists();
+            }
+
             return [
                 'id' => $post->id,
                 'description' => $post->description,
@@ -198,6 +210,9 @@ class UserController extends Controller
                 'updated_at' => $post->updated_at,
                 'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
                 'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'is_favorite' => $isFavorite,
             ];
         });
 

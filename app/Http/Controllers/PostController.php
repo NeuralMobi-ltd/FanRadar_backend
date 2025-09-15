@@ -117,13 +117,24 @@ class PostController extends Controller
             $page = $request->get('page', 1);
             $limit = $request->get('limit', 10);
 
+            $authUser = Auth::user();
 
             $posts = Post::where('user_id', $userId)
                 ->with(['medias', 'tags'])
+                ->withCount(['favorites', 'comments'])
                 ->latest()
                 ->paginate($limit, ['*'], 'page', $page);
 
-            $formattedPosts = collect($posts->items())->map(function ($post) {
+            $formattedPosts = collect($posts->items())->map(function ($post) use ($authUser) {
+                $isFavorite = false;
+                if ($authUser) {
+                    $isFavorite = Favorite::where([
+                        'user_id' => $authUser->id,
+                        'favoriteable_type' => 'App\\Models\\Post',
+                        'favoriteable_id' => $post->id
+                    ])->exists();
+                }
+
                 return [
                     'id' => $post->id,
                     'description' => $post->description,
@@ -134,6 +145,9 @@ class PostController extends Controller
                     'updated_at' => $post->updated_at,
                     'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
                     'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
+                    'likes_count' => $post->favorites_count ?? 0,
+                    'comments_count' => $post->comments_count ?? 0,
+                    'is_favorite' => $isFavorite,
                 ];
             });
 
@@ -489,6 +503,18 @@ public function updatePost($postId, Request $request)
             $media = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
             $tags = method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [];
 
+            // Le post est forcément en favoris si l'utilisateur l'a sauvegardé (à confirmer selon votre logique)
+            // Vérifier si le post est en favoris pour l'utilisateur authentifié
+            $authUser = Auth::user();
+            $isFavorite = false;
+            if ($authUser) {
+                $isFavorite = Favorite::where([
+                    'user_id' => $authUser->id,
+                    'favoriteable_type' => 'App\\Models\\Post',
+                    'favoriteable_id' => $post->id
+                ])->exists();
+            }
+
             return [
                 'id' => $post->id,
                 'description' => $post->description,
@@ -508,6 +534,7 @@ public function updatePost($postId, Request $request)
                 ] : null,
                 'likes_count' => $likeCount,
                 'comments_count' => $commentCount,
+                'is_favorite' => $isFavorite,
                 'saved_at' => $post->pivot->created_at ?? null,
                 'created_at' => $post->created_at ? $post->created_at->toISOString() : null
             ];
@@ -580,6 +607,18 @@ public function updatePost($postId, Request $request)
         // Formater les posts
         $formattedPosts = collect($posts->items())->map(function ($post) {
             $user = $post->user;
+
+            // Vérifier si le post est en favoris pour l'utilisateur authentifié
+            $authUser = Auth::user();
+            $isFavorite = false;
+            if ($authUser) {
+                $isFavorite = Favorite::where([
+                    'user_id' => $authUser->id,
+                    'favoriteable_type' => 'App\\Models\\Post',
+                    'favoriteable_id' => $post->id
+                ])->exists();
+            }
+
             return [
                 'id' => $post->id,
                 'description' => $post->description,
@@ -610,6 +649,7 @@ public function updatePost($postId, Request $request)
                 'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
                 'likes_count' => $post->favorites_count ?? 0,
                 'comments_count' => $post->comments_count ?? 0,
+                'is_favorite' => $isFavorite,
                 'feedback' => $post->feedback ?? 0,
             ];
         });
@@ -638,17 +678,31 @@ public function getHomeFeed(Request $request)
         $page = $request->get('page', 1);
         $limit = $request->get('limit', 20);
 
+        $authUser = Auth::user();
+
         $posts = Post::with(['user', 'medias', 'tags'])
+            ->withCount(['favorites', 'comments'])
             ->orderBy('created_at', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
 
-        $formattedPosts = $posts->map(function ($post) {
+        $formattedPosts = $posts->map(function ($post) use ($authUser) {
             // Récupérer toutes les données du post
             $postData = $post->toArray();
 
-            // Ajouter les compteurs
-            $postData['likes_count'] = method_exists($post, 'favorites') ? $post->favorites()->count() : 0;
-            $postData['comments_count'] = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+            // Vérifier si le post est en favoris
+            $isFavorite = false;
+            if ($authUser) {
+                $isFavorite = Favorite::where([
+                    'user_id' => $authUser->id,
+                    'favoriteable_type' => 'App\\Models\\Post',
+                    'favoriteable_id' => $post->id
+                ])->exists();
+            }
+
+            // Ajouter les compteurs et le statut favoris
+            $postData['likes_count'] = $post->favorites_count ?? 0;
+            $postData['comments_count'] = $post->comments_count ?? 0;
+            $postData['is_favorite'] = $isFavorite;
 
             // Ajouter les médias
             $postData['media'] = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
@@ -707,6 +761,8 @@ public function getHomeFeed(Request $request)
             $perPage = 50; // Limiter à 50 résultats par page maximum
         }
 
+        $authUser = Auth::user();
+
         // Recherche dans les posts par description, tags ou sous-catégorie
         $posts = \App\Models\Post::where(function($q) use ($query) {
                 // Recherche dans la description du post
@@ -722,11 +778,21 @@ public function getHomeFeed(Request $request)
             })
             ->where('content_status', 'published') // Seulement les posts publiés
             ->with(['user:id,first_name,last_name,email,profile_image', 'medias', 'tags', 'subcategory:id,name'])
+            ->withCount(['favorites', 'comments'])
             ->orderBy('created_at', 'desc')
             ->paginate($perPage, ['*'], 'page', $page);
 
         // Formater les données des posts
-        $formattedPosts = $posts->getCollection()->map(function ($post) {
+        $formattedPosts = $posts->getCollection()->map(function ($post) use ($authUser) {
+            $isFavorite = false;
+            if ($authUser) {
+                $isFavorite = Favorite::where([
+                    'user_id' => $authUser->id,
+                    'favoriteable_type' => 'App\\Models\\Post',
+                    'favoriteable_id' => $post->id
+                ])->exists();
+            }
+
             return [
                 'id' => $post->id,
                 'description' => $post->description,
@@ -747,8 +813,9 @@ public function getHomeFeed(Request $request)
                     'id' => $post->subcategory->id,
                     'name' => $post->subcategory->name
                 ] : null,
-                'likes_count' => $post->favorites ? $post->favorites()->count() : 0,
-                'comments_count' => $post->comments ? $post->comments()->count() : 0
+                'likes_count' => $post->favorites_count ?? 0,
+                'comments_count' => $post->comments_count ?? 0,
+                'is_favorite' => $isFavorite,
             ];
         });
 
@@ -797,8 +864,21 @@ public function getHomeFeed(Request $request)
             // Récupérer toutes les données du post
             $postData = $post->toArray();
 
-            // Ajouter les compteurs
-            $postData['comments_count'] = method_exists($post, 'comments') ? $post->comments()->count() : 0;
+            // Vérifier si le post est en favoris pour l'utilisateur authentifié
+            $authUser = Auth::user();
+            $isFavorite = false;
+            if ($authUser) {
+                $isFavorite = Favorite::where([
+                    'user_id' => $authUser->id,
+                    'favoriteable_type' => 'App\\Models\\Post',
+                    'favoriteable_id' => $post->id
+                ])->exists();
+            }
+
+            // Ajouter les compteurs et le statut favoris
+            $postData['likes_count'] = $post->favorites_count ?? 0;
+            $postData['comments_count'] = $post->comments_count ?? 0;
+            $postData['is_favorite'] = $isFavorite;
 
             // Ajouter les médias
             $postData['media'] = method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [];
@@ -960,6 +1040,17 @@ public function getHomeFeed(Request $request)
             $user = $post->user;
             $subcategory = $post->subcategory;
 
+            // Vérifier si le post est en favoris pour l'utilisateur authentifié
+            $authUser = Auth::user();
+            $isFavorite = false;
+            if ($authUser) {
+                $isFavorite = Favorite::where([
+                    'user_id' => $authUser->id,
+                    'favoriteable_type' => 'App\\Models\\Post',
+                    'favoriteable_id' => $post->id
+                ])->exists();
+            }
+
             return [
                 'id' => $post->id,
                 'description' => $post->description,
@@ -995,6 +1086,7 @@ public function getHomeFeed(Request $request)
                 'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
                 'likes_count' => $post->favorites_count ?? 0,
                 'comments_count' => $post->comments_count ?? 0,
+                'is_favorite' => $isFavorite,
                 'feedback' => $post->feedback ?? 0,
             ];
         });
@@ -1059,6 +1151,9 @@ public function getHomeFeed(Request $request)
             $post = $favorite->favoriteable;
             if (!$post) return null; // Post supprimé
 
+            // Vérifier si le post est toujours en favoris (il l'est forcément ici)
+            $isFavorite = true;
+
             return [
                 'id' => $post->id,
                 'description' => $post->description,
@@ -1080,6 +1175,7 @@ public function getHomeFeed(Request $request)
                 ] : null,
                 'likes_count' => method_exists($post, 'favorites') ? $post->favorites()->count() : 0,
                 'comments_count' => method_exists($post, 'comments') ? $post->comments()->count() : 0,
+                'is_favorite' => $isFavorite,
             ];
         })->filter(); // Supprimer les posts null
 
