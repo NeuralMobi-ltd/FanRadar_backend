@@ -256,11 +256,11 @@ Route::put('/orders/{order}', [OrderController::class, 'update']);
 // admin api
 // ====================
 
-Route::get('admin/users', [\App\Http\Controllers\Api\M_Controller::class, 'getAllUsers']);
-Route::get('admin/user/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'getUser']);
-Route::post('admin/users', [\App\Http\Controllers\Api\M_Controller::class, 'addUser']);
-Route::put('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateUser']);
-Route::delete('admin/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteUser']);
+Route::get('admin/users', [\App\Http\Controllers\api\M_Controller::class, 'getAllUsers']);
+Route::get('admin/user/{id}', [\App\Http\Controllers\api\M_Controller::class, 'getUser']);
+Route::post('admin/users', [\App\Http\Controllers\api\M_Controller::class, 'addUser']);
+Route::put('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateUser']);
+Route::delete('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deleteUser']);
 });
 
 Route::get('Y/categories/{category_id}/subcategories', [SubcategoryController::class, 'getCategorySubcategories']);
@@ -320,55 +320,55 @@ Route::post('/upload/image', [PersonnaliseController::class, 'uploadImage']);
 // ========== Partie des Api de Oucharou ==========
 // ROLES & PERMISSIONS
 // ====================
-Route::get('/roles-permissions', [\App\Http\Controllers\Api\M_Controller::class, 'getAllRolesAndPermissions']);
+Route::get('/roles-permissions', [\App\Http\Controllers\api\M_Controller::class, 'getAllRolesAndPermissions']);
 
 // ====================
 // USER MANAGEMENT
 // ====================
-Route::get('/users', [\App\Http\Controllers\Api\M_Controller::class, 'getAllUsers']);
-Route::get('/user/{value}', [\App\Http\Controllers\Api\M_Controller::class, 'getUser']);
-Route::post('/users', [\App\Http\Controllers\Api\M_Controller::class, 'addUser']);
-Route::put('/users/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateUser']);
+Route::get('/users', [\App\Http\Controllers\api\M_Controller::class, 'getAllUsers']);
+Route::get('/user/{value}', [\App\Http\Controllers\api\M_Controller::class, 'getUser']);
+Route::post('/users', [\App\Http\Controllers\api\M_Controller::class, 'addUser']);
+Route::put('/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateUser']);
 
 // ====================
 // CATEGORY & SUBCATEGORY MANAGEMENT (M_Controller)
 // ====================
-Route::get('/categories-simple', [\App\Http\Controllers\Api\M_Controller::class, 'getCategoriesSimple']);
-Route::get('/subcategories-simple', [\App\Http\Controllers\Api\M_Controller::class, 'getSubcategoriesSimple']);
-Route::get('/categories-with-subs', [\App\Http\Controllers\Api\M_Controller::class, 'getCategoriesWithSubs']);
-Route::post('/categories-simple', [\App\Http\Controllers\Api\M_Controller::class, 'addCategorySimple']);
-Route::post('/subcategories-simple', [\App\Http\Controllers\Api\M_Controller::class, 'addSubcategorySimple']);
-Route::delete('/categories-simple/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteCategorySimple']);
-Route::delete('/subcategories-simple/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteSubcategorySimple']);
+Route::get('/categories-simple', [\App\Http\Controllers\api\M_Controller::class, 'getCategoriesSimple']);
+Route::get('/subcategories-simple', [\App\Http\Controllers\api\M_Controller::class, 'getSubcategoriesSimple']);
+Route::get('/categories-with-subs', [\App\Http\Controllers\api\M_Controller::class, 'getCategoriesWithSubs']);
+Route::post('/categories-simple', [\App\Http\Controllers\api\M_Controller::class, 'addCategorySimple']);
+Route::post('/subcategories-simple', [\App\Http\Controllers\api\M_Controller::class, 'addSubcategorySimple']);
+Route::delete('/categories-simple/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deleteCategorySimple']);
+Route::delete('/subcategories-simple/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deleteSubcategorySimple']);
 
 // ====================
 // TAGS MANAGEMENT (M_Controller)
 // ====================
-Route::get('/tags-simple', [\App\Http\Controllers\Api\M_Controller::class, 'getAllTagsSimple']);
-Route::post('/tags-simple', [\App\Http\Controllers\Api\M_Controller::class, 'addTagSimple']);
+Route::get('/tags-simple', [\App\Http\Controllers\api\M_Controller::class, 'getAllTagsSimple']);
+Route::post('/tags-simple', [\App\Http\Controllers\api\M_Controller::class, 'addTagSimple']);
 
 // ====================
 // POSTS MANAGEMENT (M_Controller)
 // ====================
-Route::get('/posts-simple', [\App\Http\Controllers\Api\M_Controller::class, 'getAllPostsSimple']);
-Route::post('/posts-simple', [\App\Http\Controllers\Api\M_Controller::class, 'addPostSimple']);
-Route::delete('/posts-simple/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deletePostSimple']);
-Route::put('/posts-simple/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updatePostSimple']);
-Route::get('/posts-by-tag/{tag}', [\App\Http\Controllers\Api\M_Controller::class, 'getPostsByTagSimple']);
-Route::get('/posts-by-category-sub', [\App\Http\Controllers\Api\M_Controller::class, 'getPostsByCategorySubSimple']);
-Route::get('/posts-by-category/{category_id}', [\App\Http\Controllers\Api\M_Controller::class, 'getPostsByCategorySimple']);
-Route::get('/posts-by-subcategory/{subcategory_id}', [\App\Http\Controllers\Api\M_Controller::class, 'getPostsBySubcategorySimple']);
+Route::get('/posts-simple', [\App\Http\Controllers\api\M_Controller::class, 'getAllPostsSimple']);
+Route::post('/posts-simple', [\App\Http\Controllers\api\M_Controller::class, 'addPostSimple']);
+Route::delete('/posts-simple/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deletePostSimple']);
+Route::put('/posts-simple/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updatePostSimple']);
+Route::get('/posts-by-tag/{tag}', [\App\Http\Controllers\api\M_Controller::class, 'getPostsByTagSimple']);
+Route::get('/posts-by-category-sub', [\App\Http\Controllers\api\M_Controller::class, 'getPostsByCategorySubSimple']);
+Route::get('/posts-by-category/{category_id}', [\App\Http\Controllers\api\M_Controller::class, 'getPostsByCategorySimple']);
+Route::get('/posts-by-subcategory/{subcategory_id}', [\App\Http\Controllers\api\M_Controller::class, 'getPostsBySubcategorySimple']);
 
 // ====================
 
 // PRODUCTS MANAGEMENT (M_Controller)
 // ====================
-Route::get('/products-simple', [\App\Http\Controllers\Api\M_Controller::class, 'getAllProductsSimple']);
-Route::post('/products-simple', [\App\Http\Controllers\Api\M_Controller::class, 'addProductSimple']);
-Route::get('/drops-simple', [\App\Http\Controllers\Api\M_Controller::class, 'getDropsSimple']);
-Route::post('/drops-simple', [\App\Http\Controllers\Api\M_Controller::class, 'addDropSimple']);
-Route::put('/products-simple/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'updateProductSimple']);
-Route::delete('/products-simple/{id}', [\App\Http\Controllers\Api\M_Controller::class, 'deleteProductSimple']);
+Route::get('/products-simple', [\App\Http\Controllers\api\M_Controller::class, 'getAllProductsSimple']);
+Route::post('/products-simple', [\App\Http\Controllers\api\M_Controller::class, 'addProductSimple']);
+Route::get('/drops-simple', [\App\Http\Controllers\api\M_Controller::class, 'getDropsSimple']);
+Route::post('/drops-simple', [\App\Http\Controllers\api\M_Controller::class, 'addDropSimple']);
+Route::put('/products-simple/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateProductSimple']);
+Route::delete('/products-simple/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deleteProductSimple']);
 
 
 
