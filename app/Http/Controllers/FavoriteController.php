@@ -288,26 +288,20 @@ class FavoriteController extends Controller
             ], 404);
         }
 
-        // Vérifier si déjà en favori
-        $existingFavorite = Favorite::where([
+        // Utiliser firstOrCreate pour éviter les race conditions
+        $favorite = Favorite::firstOrCreate([
             'user_id' => $user->id,
             'favoriteable_id' => $post->id,
             'favoriteable_type' => 'App\\Models\\Post',
-        ])->first();
+        ]);
 
-        if ($existingFavorite) {
+        // Si $favorite->wasRecentlyCreated est false, cela signifie qu'il existait déjà
+        if (!$favorite->wasRecentlyCreated) {
             return response()->json([
                 'success' => false,
                 'message' => 'Ce post est déjà dans vos favoris.'
             ], 409);
         }
-
-        // Créer le favori
-        Favorite::create([
-            'user_id' => $user->id,
-            'favoriteable_id' => $post->id,
-            'favoriteable_type' => 'App\\Models\\Post',
-        ]);
 
         return response()->json([
             'success' => true,
@@ -381,26 +375,20 @@ class FavoriteController extends Controller
             ], 404);
         }
 
-        // Vérifier si déjà en favori
-        $existingFavorite = Favorite::where([
+        // Utiliser firstOrCreate pour éviter les race conditions
+        $favorite = Favorite::firstOrCreate([
             'user_id' => $user->id,
             'favoriteable_id' => $product->id,
             'favoriteable_type' => 'App\\Models\\Product',
-        ])->first();
+        ]);
 
-        if ($existingFavorite) {
+        // Si $favorite->wasRecentlyCreated est false, cela signifie qu'il existait déjà
+        if (!$favorite->wasRecentlyCreated) {
             return response()->json([
                 'success' => false,
                 'message' => 'Ce produit est déjà dans vos favoris.'
             ], 409);
         }
-
-        // Créer le favori
-        Favorite::create([
-            'user_id' => $user->id,
-            'favoriteable_id' => $product->id,
-            'favoriteable_type' => 'App\\Models\\Product',
-        ]);
 
         return response()->json([
             'success' => true,
