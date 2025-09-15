@@ -56,14 +56,14 @@ class ProductController extends Controller
         'user_id' => 'required|exists:users,id',
         'subcategory_id' => 'nullable|exists:subcategories,id',
         'type' => 'nullable|string|max:100',
-        'content_status' => 'nullable|in:active,inactive,draft',
+        'content_status' => 'nullable|in:draft,published,archived',
         'sale_start_date' => 'nullable|date',
         'sale_end_date' => 'nullable|date|after_or_equal:sale_start_date',
         'medias' => 'nullable|array',
     ]);
 
     $product = Product::create(array_merge($validated, [
-        'content_status' => $validated['content_status'] ?? 'active',
+        'content_status' => $validated['content_status'] ?? 'draft',
         'revenue' => ($validated['price'] * $validated['stock']), // Calcul automatique du revenue
     ]));
 
@@ -162,7 +162,7 @@ class ProductController extends Controller
             'promotion' => 'nullable|integer|min:0|max:100',
             'subcategory_id' => 'nullable|exists:subcategories,id',
             'type' => 'nullable|string|max:100',
-            'content_status' => 'nullable|in:active,inactive,draft',
+            'content_status' => 'nullable|in:draft,published,archived',
             'sale_start_date' => 'nullable|date',
             'sale_end_date' => 'nullable|date|after_or_equal:sale_start_date',
         ]);
