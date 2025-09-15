@@ -42,6 +42,11 @@ class DatabaseSeeder extends Seeder
         // Réactiver les contraintes de clés étrangères
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
+        // Créer le compte admin en premier
+        $this->call([
+            AdminUserSeeder::class,
+        ]);
+
         // Créer quelques utilisateurs avec des rôles assignés
         \App\Models\User::factory(10)->create();
 
