@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\Api\AuthentificationController;
-use App\Http\Controllers\Api\PersonnaliseController;
+use App\Http\Controllers\api\AuthentificationController;
+use App\Http\Controllers\api\PersonnaliseController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\FandomController;
 use App\Http\Controllers\FavoriteController;
