@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 
 class AuthentificationController extends Controller
 {
@@ -164,6 +165,7 @@ public function loginUser(Request $request)
             'email' => 'required|string|email',
             'password' => 'required|string|min:6',
             'profile_image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'background_image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             'date_naissance' => 'nullable|date',
             'gender' => 'nullable|in:male,female,other',
             'bio' => 'nullable|string|max:2000',
@@ -194,11 +196,18 @@ public function loginUser(Request $request)
         // Générer un OTP pour la vérification
         $otp = rand(100000, 999999);
 
-        // Traitement de l'image si elle est envoyée
+        // Traitement de l'image de profil
         $profileImagePath = null;
         if ($request->hasFile('profile_image')) {
             $path = $request->file('profile_image')->store('profile', 'public');
             $profileImagePath = 'storage/' . $path;
+        }
+
+        // Traitement de l'image de fond
+        $backgroundImagePath = null;
+        if ($request->hasFile('background_image')) {
+            $path = $request->file('background_image')->store('backgroundprofile', 'public');
+            $backgroundImagePath = 'storage/' . $path;
         }
 
         $user = User::create([
@@ -207,7 +216,7 @@ public function loginUser(Request $request)
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'profile_image' => $profileImagePath ?? null,
-            'background_image' => null,
+            'background_image' => $backgroundImagePath ?? null,
             'date_naissance' => $request->date_naissance,
             'gender' => $request->gender,
             'bio' => $request->bio ?? null,
