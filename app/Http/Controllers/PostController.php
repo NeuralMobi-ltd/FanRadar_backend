@@ -74,7 +74,7 @@ class PostController extends Controller
     public function show(Post $post)
     {
 
-    
+
 
         $post->load('user', 'medias', 'tags');
         $post->loadCount(['favorites', 'comments']);
@@ -319,6 +319,18 @@ class PostController extends Controller
 
 public function updatePost($postId, Request $request)
     {
+
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'UNAUTHORIZED',
+                    'message' => 'Utilisateur non authentifié'
+                ]
+            ], 401);
+        }
+
         $post = Post::find($postId);
         if (!$post) {
             return response()->json([
@@ -328,6 +340,17 @@ public function updatePost($postId, Request $request)
                     'message' => 'Post non trouvé'
                 ]
             ], 404);
+        }
+
+        // Seul l'admin ou le propriétaire du post peut modifier
+        if (!$user->isAdmin() && !$user->ownsPost($post)) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'FORBIDDEN',
+                    'message' => 'Vous n\'êtes pas autorisé à modifier ce post'
+                ]
+            ], 403);
         }
 
         $validator = Validator::make($request->all(), [
@@ -395,21 +418,24 @@ public function updatePost($postId, Request $request)
 
         return response()->json([
             'message' => 'Post mis à jour avec succès.',
-            'post' => [
-                'id' => $post->id,
-                'body' => $post->body,
-                'media' => method_exists($post, 'medias') ? $post->medias->pluck('file_path')->toArray() : [],
-                'tags' => method_exists($post, 'tags') ? $post->tags->pluck('tag_name')->toArray() : [],
-                'content_status' => $post->content_status,
-                'schedule_at' => $post->schedule_at,
-                'createdAt' => $post->created_at ? $post->created_at->toISOString() : null
-            ]
+            'post' => $post
         ], 200);
     }
 
 
      public function deletePost($postId, Request $request)
     {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'UNAUTHORIZED',
+                    'message' => 'Utilisateur non authentifié'
+                ]
+            ], 401);
+        }
+
         $post = Post::with('medias')->find($postId);
         if (!$post) {
             return response()->json([
@@ -419,6 +445,17 @@ public function updatePost($postId, Request $request)
                     'message' => 'Post non trouvé'
                 ]
             ], 404);
+        }
+
+        // Seul l'admin ou le propriétaire du post peut supprimer
+        if (!$user->isAdmin() && !$user->ownsPost($post)) {
+            return response()->json([
+                'success' => false,
+                'error' => [
+                    'code' => 'FORBIDDEN',
+                    'message' => 'Vous n\'êtes pas autorisé à supprimer ce post'
+                ]
+            ], 403);
         }
 
         // Supprimer les fichiers médias associés

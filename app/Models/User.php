@@ -208,4 +208,102 @@ class User extends Authenticatable
     {
         return $this->savedPosts()->toggle($postId);
     }
+
+    /**
+     * Vérifier si l'utilisateur est un administrateur
+     *
+     * @return bool
+     */
+    public function isAdmin()
+    {
+        return $this->hasRole('admin');
+    }
+
+    /**
+     * Vérifier si l'utilisateur appartient à un fandom spécifique avec un rôle donné
+     *
+     * @param int $fandomId L'ID du fandom
+     * @param string|null $role Le rôle à vérifier (optionnel)
+     * @return bool
+     */
+    public function belongsToFandom($fandomId, $role = null)
+    {
+        $query = $this->members()->where('fandom_id', $fandomId);
+
+        if ($role !== null) {
+            $query->where('role', $role);
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * Obtenir le rôle de l'utilisateur dans un fandom spécifique
+     *
+     * @param int $fandomId L'ID du fandom
+     * @return string|null Le rôle dans le fandom ou null si pas membre
+     */
+    public function getFandomRole($fandomId)
+    {
+        $member = $this->members()->where('fandom_id', $fandomId)->first();
+
+        return $member ? $member->role : null;
+    }
+
+    /**
+     * Vérifier si l'utilisateur est administrateur d'un fandom spécifique
+     *
+     * @param int $fandomId L'ID du fandom
+     * @return bool
+     */
+    public function isFandomAdmin($fandomId)
+    {
+        return $this->belongsToFandom($fandomId, 'admin');
+    }
+
+    /**
+     * Vérifier si l'utilisateur est modérateur d'un fandom spécifique
+     *
+     * @param int $fandomId L'ID du fandom
+     * @return bool
+     */
+    public function isFandomModerator($fandomId)
+    {
+        return $this->belongsToFandom($fandomId, 'moderator');
+    }
+
+    /**
+     * Vérifier si l'utilisateur est un membre simple d'un fandom spécifique
+     *
+     * @param int $fandomId L'ID du fandom
+     * @return bool
+     */
+    public function isFandomMember($fandomId)
+    {
+        return $this->belongsToFandom($fandomId, 'member');
+    }
+
+    /**
+     * Vérifier si un post appartient à cet utilisateur
+     *
+     * @param int|Post $post L'ID du post ou l'instance du post
+     * @return bool
+     */
+    public function ownsPost($post)
+    {
+        $postId = is_object($post) ? $post->id : $post;
+
+        return $this->posts()->where('id', $postId)->exists();
+    }
+
+    /**
+     * Vérifier si un post appartient à cet utilisateur (alias pour ownsPost)
+     *
+     * @param int|Post $post L'ID du post ou l'instance du post
+     * @return bool
+     */
+    public function isPostOwner($post)
+    {
+        return $this->ownsPost($post);
+    }
 }

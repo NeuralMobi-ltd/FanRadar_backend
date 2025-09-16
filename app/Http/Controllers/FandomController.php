@@ -259,9 +259,8 @@ class FandomController extends Controller
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
-        // Only allow admins of the fandom to update
-        $member = \App\Models\Member::where('user_id', $user->id)->where('fandom_id', $fandom->id)->first();
-        if (!$member || ($member->role ?? '') !== 'admin') {
+        // Vérifier si l'utilisateur est admin ou modérateur du fandom via User model
+        if (!$user->isFandomAdmin($fandom->id) && !$user->isFandomModerator($fandom->id) && !$user->isAdmin()) {
             return response()->json(['success' => false, 'message' => 'Permission denied'], 403);
         }
 
@@ -519,6 +518,9 @@ class FandomController extends Controller
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
+         if (!$admin->isFandomAdmin($fandom->id) && !$admin->isFandomModerator($fandom->id) && !$admin->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Permission denied'], 403);
+        }
         // Vérifier que l'admin est un administrateur de ce fandom
         $adminMembership = \App\Models\Member::where('user_id', $admin->id)
             ->where('fandom_id', $fandom_id)
@@ -602,12 +604,8 @@ class FandomController extends Controller
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
-        // Vérifier que l'utilisateur est membre du fandom
-        $membership = \App\Models\Member::where('user_id', $user->id)
-            ->where('fandom_id', $fandom_id)
-            ->first();
-
-        if (!$membership) {
+        // Vérifier que l'utilisateur appartient au fandom (via User model)
+        if (!$user->belongsToFandom($fandom_id)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Access denied. You must be a member of this fandom to post.'
@@ -715,25 +713,11 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
             return response()->json(['success' => false, 'message' => 'Post not found in this fandom'], 404);
         }
 
-        // Vérifier les permissions (propriétaire du post ou admin/moderator du fandom)
-        $canEdit = false;
-        if ($post->user_id === $user->id) {
-            $canEdit = true; // Propriétaire du post
-        } else {
-            // Vérifier si l'utilisateur est admin ou moderator du fandom
-            $membership = \App\Models\Member::where('user_id', $user->id)
-                ->where('fandom_id', $fandom->id)
-                ->whereIn('role', ['admin', 'moderator'])
-                ->first();
-            if ($membership) {
-                $canEdit = true;
-            }
-        }
-
-        if (!$canEdit) {
+        // Vérifier si l'utilisateur est propriétaire du post
+        if (!$user->ownsPost($post)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Access denied. You can only edit your own posts or you must be an admin/moderator.'
+                'message' => 'Access denied. You can only edit your own posts.'
             ], 403);
         }
 
@@ -812,19 +796,12 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
             return response()->json(['success' => false, 'message' => 'Post not found in this fandom'], 404);
         }
 
-        // Vérifier les permissions (propriétaire du post ou admin/moderator du fandom)
+        // Vérifier les permissions via User model
         $canDelete = false;
-        if ($post->user_id === $user->id) {
+        if ($user->ownsPost($post)) {
             $canDelete = true; // Propriétaire du post
-        } else {
-            // Vérifier si l'utilisateur est admin ou moderator du fandom
-            $membership = \App\Models\Member::where('user_id', $user->id)
-                ->where('fandom_id', $fandom->id)
-                ->whereIn('role', ['admin', 'moderator'])
-                ->first();
-            if ($membership) {
-                $canDelete = true;
-            }
+        } elseif ($user->isFandomAdmin($fandom->id) || $user->isFandomModerator($fandom->id)) {
+            $canDelete = true; // Admin ou modérateur du fandom
         }
 
         if (!$canDelete) {

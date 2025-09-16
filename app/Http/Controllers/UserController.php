@@ -54,6 +54,7 @@ class UserController extends Controller
     {
         $user = Auth::user();
 
+
         $validator = Validator::make($request->all(), [
             'first_name' => 'sometimes|string|max:255',
             'last_name' => 'sometimes|string|max:255',
