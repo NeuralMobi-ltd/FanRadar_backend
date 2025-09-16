@@ -73,8 +73,73 @@ class PostController extends Controller
     // Afficher un post spécifique avec relations
     public function show(Post $post)
     {
-        $post->load('user', 'medias');
-        return response()->json($post);
+        $post->load('user', 'medias', 'tags');
+        $post->loadCount(['favorites', 'comments']);
+
+        // Charger les commentaires avec les utilisateurs
+        $post->load(['comments' => function($query) {
+            $query->with('user:id,first_name,last_name,profile_image')
+                  ->orderBy('created_at', 'desc');
+        }]);
+
+        // Vérifier si le post est en favoris pour l'utilisateur authentifié
+        $authUser = Auth::user();
+        $isFavorite = false;
+        if ($authUser) {
+            $isFavorite = Favorite::where([
+                'user_id' => $authUser->id,
+                'favoriteable_type' => 'App\\Models\\Post',
+                'favoriteable_id' => $post->id
+            ])->exists();
+        }
+
+        // Formater les commentaires
+        $formattedComments = $post->comments->map(function ($comment) {
+            return [
+                'id' => $comment->id,
+                'content' => $comment->content,
+                'created_at' => $comment->created_at ? $comment->created_at->toISOString() : null,
+                'updated_at' => $comment->updated_at ? $comment->updated_at->toISOString() : null,
+                'user' => $comment->user ? [
+                    'id' => $comment->user->id,
+                    'first_name' => $comment->user->first_name,
+                    'last_name' => $comment->user->last_name,
+                    'full_name' => trim($comment->user->first_name . ' ' . $comment->user->last_name),
+                    'profile_image' => $comment->user->profile_image,
+                ] : null,
+            ];
+        });
+
+        // Formater la réponse
+        $postData = [
+            'id' => $post->id,
+            'description' => $post->description,
+            'content_status' => $post->content_status,
+            'schedule_at' => $post->schedule_at,
+            'category_id' => $post->category_id ?? null,
+            'subcategory_id' => $post->subcategory_id ?? null,
+            'fandom_id' => $post->fandom_id ?? null,
+            'created_at' => $post->created_at,
+            'updated_at' => $post->updated_at,
+            'user' => $post->user ? [
+                'id' => $post->user->id,
+                'first_name' => $post->user->first_name,
+                'last_name' => $post->user->last_name,
+                'email' => $post->user->email,
+                'profile_image' => $post->user->profile_image,
+            ] : null,
+            'media' => $post->medias ? $post->medias->pluck('file_path')->toArray() : [],
+            'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
+            'likes_count' => $post->favorites_count ?? 0,
+            'comments_count' => $post->comments_count ?? 0,
+            'is_favorite' => $isFavorite,
+            'comments' => $formattedComments,
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $postData
+        ]);
     }
 
     // Mettre à jour un post (sans changer les médias ici)
