@@ -33,6 +33,9 @@ Route::post('/register', [AuthentificationController::class, 'register']);
 
 // ========== ROUTES PUBLIQUES POUR E-COMMERCE ==========
 
+
+Route::middleware('auth:sanctum')->group(function () {
+
 // � PRODUITS - Routes publiques
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{product}', [ProductController::class, 'show']);
@@ -87,7 +90,7 @@ Route::get('/users/{userId}/following', [\App\Http\Controllers\FollowController:
 Route::get('/users/{userId}/follow/check', [\App\Http\Controllers\FollowController::class, 'checkFollowStatus']);
 Route::get('/users/{userId}/follow/stats', [\App\Http\Controllers\FollowController::class, 'getUserFollowStats']);
 Route::get('/users/{userId}/mutual-followers', [\App\Http\Controllers\FollowController::class, 'getMutualFollowers']);
-
+});
 
 // ==========================================
 // NOUVELLES ROUTES API PERSONNALISÉES
@@ -261,7 +264,6 @@ Route::get('admin/user/{id}', [\App\Http\Controllers\api\M_Controller::class, 'g
 Route::post('admin/users', [\App\Http\Controllers\api\M_Controller::class, 'addUser']);
 Route::put('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateUser']);
 Route::delete('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deleteUser']);
-});
 
 Route::get('Y/categories/{category_id}/subcategories', [SubcategoryController::class, 'getCategorySubcategories']);
 Route::get('Y/categories', [CategoryController::class, 'getAllCategories']);
@@ -285,10 +287,6 @@ Route::post('/posts/{postId}/share', [PostController::class, 'sharePost']);
 // ====================
 // SAVED POSTS - PROTECTED
 // ====================
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/posts/saved', [\App\Http\Controllers\Api\PersonnaliseController::class, 'getSavedPosts']);
-
-});
 
 // ====================
 // HASHTAGS
@@ -370,5 +368,6 @@ Route::post('/drops-simple', [\App\Http\Controllers\api\M_Controller::class, 'ad
 Route::put('/products-simple/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateProductSimple']);
 Route::delete('/products-simple/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deleteProductSimple']);
 
+});
 
 

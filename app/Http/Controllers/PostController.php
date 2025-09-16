@@ -73,6 +73,9 @@ class PostController extends Controller
     // Afficher un post spécifique avec relations
     public function show(Post $post)
     {
+
+    
+
         $post->load('user', 'medias', 'tags');
         $post->loadCount(['favorites', 'comments']);
 
@@ -84,6 +87,7 @@ class PostController extends Controller
 
         // Vérifier si le post est en favoris pour l'utilisateur authentifié
         $authUser = Auth::user();
+
         $isFavorite = false;
         if ($authUser) {
             $isFavorite = Favorite::where([
