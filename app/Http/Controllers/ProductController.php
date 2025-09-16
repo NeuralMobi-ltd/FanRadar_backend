@@ -46,6 +46,14 @@ class ProductController extends Controller
     // ✅ POST /api/products — Création d’un produit + médias
    public function store(Request $request)
 {
+    $user = Auth::user();
+    if (!$user || !$user->isAdmin()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Access denied. Only admins can create products.'
+        ], 403);
+    }
+
     // Validation de base, sans medias.*.file_path en string mais en fichiers
     $validated = $request->validate([
         'product_name' => 'required|string|max:255',
@@ -154,6 +162,14 @@ class ProductController extends Controller
     // ✅ PUT/PATCH /api/products/{product} — Modifier un produit (pas les médias ici)
     public function update(Request $request, Product $product)
     {
+        $user = Auth::user();
+        if (!$user || !$user->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied. Only admins can update products.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'product_name' => 'nullable|string|max:255',
             'description' => 'nullable|string',
