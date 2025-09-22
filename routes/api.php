@@ -31,6 +31,10 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::post('/login', [AuthentificationController::class, 'login']);
 Route::post('/register', [AuthentificationController::class, 'register']);
 
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories/{category}', [CategoryController::class, 'show']);
+Route::get('Y/categories/{category_id}/subcategories', [SubcategoryController::class, 'getCategorySubcategories']);
+Route::get('Y/categories', [CategoryController::class, 'getAllCategories']);
 // ========== ROUTES PUBLIQUES POUR E-COMMERCE ==========
 
 
@@ -57,8 +61,8 @@ Route::post('/tags/attach', [TagController::class, 'attachTag']);// donner et cr
 Route::delete('/tags/detach', [TagController::class, 'detachTag']);
 
 // cette Partie de categories et commun entre yassin et oucharou
-Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/categories/{category}', [CategoryController::class, 'show']);
+
+
 Route::post('/categories', [CategoryController::class, 'store']);
 Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
 Route::put('/categories/{category}', [CategoryController::class, 'update']);
@@ -265,8 +269,7 @@ Route::post('admin/users', [\App\Http\Controllers\api\M_Controller::class, 'addU
 Route::put('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateUser']);
 Route::delete('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deleteUser']);
 
-Route::get('Y/categories/{category_id}/subcategories', [SubcategoryController::class, 'getCategorySubcategories']);
-Route::get('Y/categories', [CategoryController::class, 'getAllCategories']);
+
 
 
 // ====================

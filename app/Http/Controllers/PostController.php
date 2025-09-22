@@ -382,6 +382,18 @@ public function updatePost($postId, Request $request)
 
         $post->update($updateData);
 
+        // Mettre à jour les tags si fournis
+        if ($request->has('tags')) {
+            $tags = $request->input('tags', []);
+            $post->tags()->detach();
+            if (!empty($tags) && is_array($tags)) {
+                foreach ($tags as $tagName) {
+                    $tag = \App\Models\Tag::firstOrCreate(['tag_name' => $tagName]);
+                    $post->tags()->attach($tag->id);
+                }
+            }
+        }
+
         // Gérer l'upload de nouveaux médias (ajoute, ne supprime pas les anciens)
         $mediaFiles = $request->file('medias');
         if (is_iterable($mediaFiles)) {
