@@ -1027,6 +1027,7 @@ public function getFandomPosts($fandomId, Request $request)
         }
 
         $posts = \App\Models\Post::where('fandom_id', $fandomId)
+            ->where('content_status', 'published')
             ->with(['medias', 'tags', 'user'])
             ->orderBy('created_at', 'desc')
             ->paginate($limit, ['*'], 'page', $page);

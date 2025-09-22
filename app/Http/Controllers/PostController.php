@@ -189,6 +189,7 @@ class PostController extends Controller
             $authUser = Auth::user();
 
             $posts = Post::where('user_id', $userId)
+                ->where('content_status', 'published')
                 ->with(['medias', 'tags'])
                 ->withCount(['favorites', 'comments'])
                 ->latest()
@@ -610,6 +611,7 @@ public function updatePost($postId, Request $request)
 
         // Récupérer les posts sauvegardés avec pagination
         $savedPosts = $user->savedPosts()
+            ->where('content_status', 'published')
             ->with(['user', 'medias', 'tags'])
             ->orderBy('saved_posts.created_at', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
@@ -799,6 +801,7 @@ public function getHomeFeed(Request $request)
         $authUser = Auth::user();
 
         $posts = Post::with(['user', 'medias', 'tags'])
+            ->where('content_status', 'published')
             ->withCount(['favorites', 'comments'])
             ->orderBy('created_at', 'desc')
             ->paginate($limit, ['*'], 'page', $page);

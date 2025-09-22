@@ -47,12 +47,18 @@ Route::post('/products', [ProductController::class, 'store']);
 Route::put('/products/{product}', [ProductController::class, 'update']);
 Route::delete('/products/{product}', [ProductController::class, 'destroy']);
 
+
 // � Post - Routes publiques
 Route::get('/posts', [PostController::class, 'index']);
 Route::get('/posts/{post}', [PostController::class, 'show']);
 Route::post('/posts', [PostController::class, 'store']);
 Route::put('/posts/{post}', [PostController::class, 'update']);
 Route::delete('/posts/{post}', [PostController::class, 'destroy']);
+
+// === STATISTICS API ===
+Route::get('Y/stats/users/count', [PostController::class, 'getUserCount']);
+Route::get('Y/stats/products/count', [PostController::class, 'getProductCount']);
+Route::get('Y/stats/subcategories/{subcategoryId}/posts/count', [PostController::class, 'getSubcategoryPostCount']);
 
 
 

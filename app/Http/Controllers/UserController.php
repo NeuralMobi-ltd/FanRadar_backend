@@ -182,6 +182,7 @@ class UserController extends Controller
 
         // Récupérer les posts de l'utilisateur avec les compteurs
         $posts = Post::where('user_id', $userId)
+            ->where('content_status', 'published')
             ->with(['medias', 'tags'])
             ->withCount(['favorites', 'comments'])
             ->latest()
