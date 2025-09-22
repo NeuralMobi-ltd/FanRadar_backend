@@ -1318,7 +1318,20 @@ public function getHomeFeed(Request $request)
     }
 
 
+    /**
+     * Retourne le nombre de posts groupés par content_status.
+     */
+    public function getPostCount()
+    {
+        $counts = \App\Models\Post::select('content_status')
+            ->selectRaw('COUNT(*) as count')
+            ->groupBy('content_status')
+            ->get();
 
-
+        return response()->json([
+            'success' => true,
+            'post_counts' => $counts
+        ]);
+    }
 
 }

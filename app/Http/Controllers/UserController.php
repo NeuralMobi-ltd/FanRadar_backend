@@ -456,4 +456,15 @@ public function getUserFollowing($userId) {
         ], 200);
     }
 
+    /**
+     * Retourne le nombre total d'utilisateurs.
+     */
+    public function getUserCount()
+    {
+        $count = User::count();
+        return response()->json([
+            'success' => true,
+            'user_count' => $count
+        ]);
+    }
 }

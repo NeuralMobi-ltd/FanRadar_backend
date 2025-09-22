@@ -14,6 +14,7 @@ use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\UserController;
+use App\Models\Subcategory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -56,10 +57,13 @@ Route::put('/posts/{post}', [PostController::class, 'update']);
 Route::delete('/posts/{post}', [PostController::class, 'destroy']);
 
 // === STATISTICS API ===
-Route::get('Y/stats/users/count', [PostController::class, 'getUserCount']);
-Route::get('Y/stats/products/count', [PostController::class, 'getProductCount']);
-Route::get('Y/stats/subcategories/{subcategoryId}/posts/count', [PostController::class, 'getSubcategoryPostCount']);
-
+Route::get('stats/users/count', [UserController::class, 'getUserCount']);
+Route::get('stats/fandoms/count', [FandomController::class, 'getFandomCount']);
+Route::get('stats/Posts', [PostController::class, 'getPostCount']);
+Route::get('stats/Medias', [SubcategoryController::class, 'getMediacount']);
+Route::get('stats/Product', [ProductController::class, 'getProductcount']);
+Route::get('stats/Orders', [OrderController::class, 'getOrdercount']);
+Route::get('stats/Tags', [TagsController::class, 'getTagscount']);
 
 
 

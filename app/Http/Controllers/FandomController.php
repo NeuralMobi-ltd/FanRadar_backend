@@ -1359,4 +1359,16 @@ public function getFandomPosts($fandomId, Request $request)
         ]);
     }
 
+    /**
+     * Retourne le nombre total de fandoms.
+     */
+    public function getFandomCount()
+    {
+        $count = \App\Models\Fandom::count();
+        return response()->json([
+            'success' => true,
+            'fandom_count' => $count
+        ]);
+    }
+
 }

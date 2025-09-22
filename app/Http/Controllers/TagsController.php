@@ -179,4 +179,16 @@ class TagsController extends Controller
         ]);
     }
 
+    /**
+     * Retourne le nombre total de tags.
+     */
+    public function getTagsCount()
+    {
+        $count = \App\Models\Tag::count();
+        return response()->json([
+            'success' => true,
+            'tags_count' => $count
+        ]);
+    }
+
 }

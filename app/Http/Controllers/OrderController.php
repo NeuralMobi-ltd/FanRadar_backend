@@ -141,4 +141,16 @@ class OrderController extends Controller
         $order->delete();
         return response()->json(['message' => 'Order deleted successfully']);
     }
+
+    /**
+     * Retourne le nombre total de commandes.
+     */
+    public function getOrderCount()
+    {
+        $count = \App\Models\Order::count();
+        return response()->json([
+            'success' => true,
+            'order_count' => $count
+        ]);
+    }
 }
