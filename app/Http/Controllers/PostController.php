@@ -189,6 +189,7 @@ class PostController extends Controller
             $authUser = Auth::user();
 
             $posts = Post::where('user_id', $userId)
+                ->where('content_status', 'published')
                 ->with(['medias', 'tags'])
                 ->withCount(['favorites', 'comments'])
                 ->latest()
@@ -381,6 +382,18 @@ public function updatePost($postId, Request $request)
         if ($request->has('schedule_at')) $updateData['schedule_at'] = $request->schedule_at;
 
         $post->update($updateData);
+
+        // Mettre à jour les tags si fournis
+        if ($request->has('tags')) {
+            $tags = $request->input('tags', []);
+            $post->tags()->detach();
+            if (!empty($tags) && is_array($tags)) {
+                foreach ($tags as $tagName) {
+                    $tag = \App\Models\Tag::firstOrCreate(['tag_name' => $tagName]);
+                    $post->tags()->attach($tag->id);
+                }
+            }
+        }
 
         // Gérer l'upload de nouveaux médias (ajoute, ne supprime pas les anciens)
         $mediaFiles = $request->file('medias');
@@ -598,6 +611,7 @@ public function updatePost($postId, Request $request)
 
         // Récupérer les posts sauvegardés avec pagination
         $savedPosts = $user->savedPosts()
+            ->where('content_status', 'published')
             ->with(['user', 'medias', 'tags'])
             ->orderBy('saved_posts.created_at', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
@@ -787,6 +801,7 @@ public function getHomeFeed(Request $request)
         $authUser = Auth::user();
 
         $posts = Post::with(['user', 'medias', 'tags'])
+            ->where('content_status', 'published')
             ->withCount(['favorites', 'comments'])
             ->orderBy('created_at', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
@@ -1303,7 +1318,20 @@ public function getHomeFeed(Request $request)
     }
 
 
+    /**
+     * Retourne le nombre de posts groupés par content_status.
+     */
+    public function getPostCount()
+    {
+        $counts = \App\Models\Post::select('content_status')
+            ->selectRaw('COUNT(*) as count')
+            ->groupBy('content_status')
+            ->get();
 
-
+        return response()->json([
+            'success' => true,
+            'post_counts' => $counts
+        ]);
+    }
 
 }

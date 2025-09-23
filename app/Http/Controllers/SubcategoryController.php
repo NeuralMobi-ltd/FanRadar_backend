@@ -227,4 +227,21 @@ public function getSubcategoryFandoms($subcategoryId)
         ]);
     }
 
+
+    /**
+     * Retourne le nombre de médias groupés par type (image, video).
+     */
+    public function getMediacount()
+    {
+        $counts = \App\Models\Media::select('media_type')
+            ->selectRaw('COUNT(*) as count')
+            ->groupBy('media_type')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'media_counts' => $counts
+        ]);
+    }
+
 }

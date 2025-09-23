@@ -14,6 +14,7 @@ use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\UserController;
+use App\Models\Subcategory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -31,6 +32,10 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::post('/login', [AuthentificationController::class, 'login']);
 Route::post('/register', [AuthentificationController::class, 'register']);
 
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories/{category}', [CategoryController::class, 'show']);
+Route::get('Y/categories/{category_id}/subcategories', [SubcategoryController::class, 'getCategorySubcategories']);
+Route::get('Y/categories', [CategoryController::class, 'getAllCategories']);
 // ========== ROUTES PUBLIQUES POUR E-COMMERCE ==========
 
 
@@ -43,6 +48,7 @@ Route::post('/products', [ProductController::class, 'store']);
 Route::put('/products/{product}', [ProductController::class, 'update']);
 Route::delete('/products/{product}', [ProductController::class, 'destroy']);
 
+
 // � Post - Routes publiques
 Route::get('/posts', [PostController::class, 'index']);
 Route::get('/posts/{post}', [PostController::class, 'show']);
@@ -50,6 +56,14 @@ Route::post('/posts', [PostController::class, 'store']);
 Route::put('/posts/{post}', [PostController::class, 'update']);
 Route::delete('/posts/{post}', [PostController::class, 'destroy']);
 
+// === STATISTICS API ===
+Route::get('stats/users/count', [UserController::class, 'getUserCount']);
+Route::get('stats/fandoms/count', [FandomController::class, 'getFandomCount']);
+Route::get('stats/Posts', [PostController::class, 'getPostCount']);
+Route::get('stats/Medias', [SubcategoryController::class, 'getMediacount']);
+Route::get('stats/Product', [ProductController::class, 'getProductcount']);
+Route::get('stats/Orders', [OrderController::class, 'getOrdercount']);
+Route::get('stats/Tags', [TagsController::class, 'getTagscount']);
 
 
 
@@ -57,8 +71,8 @@ Route::post('/tags/attach', [TagController::class, 'attachTag']);// donner et cr
 Route::delete('/tags/detach', [TagController::class, 'detachTag']);
 
 // cette Partie de categories et commun entre yassin et oucharou
-Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/categories/{category}', [CategoryController::class, 'show']);
+
+
 Route::post('/categories', [CategoryController::class, 'store']);
 Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
 Route::put('/categories/{category}', [CategoryController::class, 'update']);
@@ -265,8 +279,7 @@ Route::post('admin/users', [\App\Http\Controllers\api\M_Controller::class, 'addU
 Route::put('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateUser']);
 Route::delete('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deleteUser']);
 
-Route::get('Y/categories/{category_id}/subcategories', [SubcategoryController::class, 'getCategorySubcategories']);
-Route::get('Y/categories', [CategoryController::class, 'getAllCategories']);
+
 
 
 // ====================

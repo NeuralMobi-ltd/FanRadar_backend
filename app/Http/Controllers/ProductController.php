@@ -512,4 +512,16 @@ class ProductController extends Controller
             ]
         ]);
     }
+
+    /**
+     * Retourne le nombre total de produits.
+     */
+    public function getProductCount()
+    {
+        $count = \App\Models\Product::count();
+        return response()->json([
+            'success' => true,
+            'product_count' => $count
+        ]);
+    }
 }
