@@ -54,7 +54,7 @@ class Product extends Model
     }
 public function subcategory()
 {
-    return $this->belongsTo(SubCategory::class);
+    return $this->belongsTo(Subcategory::class);
 }
 
 // Relation avec les favoris
