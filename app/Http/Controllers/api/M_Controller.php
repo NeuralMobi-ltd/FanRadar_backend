@@ -284,7 +284,7 @@ class M_Controller extends Controller
      */
     public function getSubcategoriesSimple()
     {
-        $subcategories = \App\Models\SubCategory::select('id', 'category_id as cat_id', 'name')->get();
+        $subcategories = \App\Models\Subcategory::select('id', 'category_id as cat_id', 'name')->get();
         return response()->json(['success' => true, 'data' => $subcategories]);
     }
 
@@ -328,7 +328,7 @@ class M_Controller extends Controller
     public function addSubcategorySimple(Request $request)
     {
         $request->validate(['name' => 'required|string', 'id_cat' => 'required|integer|exists:categories,id']);
-        $sub = \App\Models\SubCategory::create(['name' => $request->name, 'category_id' => $request->id_cat]);
+        $sub = \App\Models\Subcategory::create(['name' => $request->name, 'category_id' => $request->id_cat]);
         return response()->json(['success' => true, 'data' => $sub], 201);
     }
 
@@ -345,7 +345,7 @@ class M_Controller extends Controller
     }
     public function deleteSubcategorySimple($id)
     {
-        $sub = \App\Models\SubCategory::find($id);
+        $sub = \App\Models\Subcategory::find($id);
         if (!$sub) return response()->json(['success' => false, 'error' => 'Subcategory not found'], 404);
         $sub->delete();
         return response()->json(['success' => true, 'message' => 'Subcategory deleted']);

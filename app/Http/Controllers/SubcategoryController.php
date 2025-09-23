@@ -152,7 +152,7 @@ class SubcategoryController extends Controller
 public function getSubcategoryFandoms($subcategoryId)
     {
         // Récupérer la sous-catégorie avec sa catégorie parent
-        $subcategory = \App\Models\SubCategory::with(['category'])->find($subcategoryId);
+        $subcategory = \App\Models\Subcategory::with(['category'])->find($subcategoryId);
 
         if (!$subcategory) {
             return response()->json([
@@ -211,7 +211,7 @@ public function getSubcategoryFandoms($subcategoryId)
             ], 404);
         }
 
-        $subcategories = \App\Models\SubCategory::where('category_id', $category_id)->get();
+        $subcategories = \App\Models\Subcategory::where('category_id', $category_id)->get();
 
         return response()->json([
             'success' => true,

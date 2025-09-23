@@ -952,7 +952,7 @@ public function getFandomsByCategory($category_id, Request $request)
         $limit = min(50, max(1, (int) $request->get('limit', 10)));
 
         // Récupérer les subcategories de cette catégorie
-        $subcategoryIds = \App\Models\SubCategory::where('category_id', $category_id)->pluck('id');
+        $subcategoryIds = \App\Models\Subcategory::where('category_id', $category_id)->pluck('id');
 
         // Récupérer les fandoms liés à ces subcategories avec pagination
         $fandomsQuery = \App\Models\Fandom::with('subcategory')
@@ -1251,7 +1251,7 @@ public function getFandomPosts($fandomId, Request $request)
         }
 
         // Récupérer toutes les sous-catégories de cette catégorie
-        $subcategories = \App\Models\SubCategory::where('category_id', $categoryId)->get();
+        $subcategories = \App\Models\Subcategory::where('category_id', $categoryId)->get();
         $subcategoryIds = $subcategories->pluck('id')->toArray();
 
         if (empty($subcategoryIds)) {
