@@ -1113,7 +1113,7 @@ public function getHomeFeed(Request $request)
         }
 
         // Récupérer toutes les sous-catégories de cette catégorie
-        $subcategories = \App\Models\SubCategory::where('category_id', $categoryId)->get();
+        $subcategories = \App\Models\Subcategory::where('category_id', $categoryId)->get();
         $subcategoryIds = $subcategories->pluck('id')->toArray();
 
         if (empty($subcategoryIds)) {
