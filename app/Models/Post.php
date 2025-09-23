@@ -9,7 +9,7 @@ class Post extends Model
 {
     use HasFactory;
     protected $fillable = [
-        
+
         'user_id',
         'feedback',
         'schedule_at',
@@ -41,7 +41,7 @@ class Post extends Model
     }
     public function subcategory()
     {
-        return $this->belongsTo(SubCategory::class);
+        return $this->belongsTo(Subcategory::class);
     }
 
     public function category()

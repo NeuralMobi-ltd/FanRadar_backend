@@ -19,7 +19,7 @@ class Fandom extends Model
 
     public function subcategory()
     {
-        return $this->belongsTo(SubCategory::class);
+        return $this->belongsTo(Subcategory::class);
     }
 
     public function posts()
