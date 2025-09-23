@@ -36,6 +36,8 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{category}', [CategoryController::class, 'show']);
 Route::get('Y/categories/{category_id}/subcategories', [SubcategoryController::class, 'getCategorySubcategories']);
 Route::get('Y/categories', [CategoryController::class, 'getAllCategories']);
+Route::get('/subcategories', [SubcategoryController::class, 'index']);
+Route::get('/subcategories/{subcategory}', [SubcategoryController::class, 'show']);
 // ========== ROUTES PUBLIQUES POUR E-COMMERCE ==========
 
 
@@ -77,8 +79,7 @@ Route::post('/categories', [CategoryController::class, 'store']);
 Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
 Route::put('/categories/{category}', [CategoryController::class, 'update']);
 
-Route::get('/subcategories', [SubcategoryController::class, 'index']);
-Route::get('/subcategories/{subcategory}', [SubcategoryController::class, 'show']);
+
 Route::post('/subcategories', [SubcategoryController::class, 'store']);
 Route::delete('/subcategories/{subcategory}', [SubcategoryController::class, 'destroy']);
 Route::put('/subcategories/{subcategory}', [SubcategoryController::class, 'update']);
