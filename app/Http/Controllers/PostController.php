@@ -1334,4 +1334,31 @@ public function getHomeFeed(Request $request)
         ]);
     }
 
+
+    public function getScheduledPosts(Request $request)
+    {
+        $isScheduled = $request->query('is_scheduled', null);
+        if ($isScheduled === null) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Le paramètre is_scheduled est requis.'
+            ], 400);
+        }
+        $isScheduled = filter_var($isScheduled, FILTER_VALIDATE_BOOLEAN);
+        $query = \App\Models\Post::query();
+        if ($isScheduled) {
+            $query->whereNotNull('schedule_at');
+        } else {
+            $query->whereNull('schedule_at');
+        }
+        $posts = $query->where('content_status', 'published')
+            ->with(['user', 'medias', 'tags'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+        return response()->json([
+            'success' => true,
+            'data' => $posts
+        ]);
+    }
+
 }
