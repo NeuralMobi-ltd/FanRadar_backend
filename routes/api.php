@@ -258,6 +258,10 @@ Route::delete('products/{product}', [ProductController::class, 'destroy']);
 
 
 
+Route::get('Y/posts/scheduled', [PostController::class, 'getScheduledPosts']);
+
+
+
 Route::post('/ratings', [RatingController::class, 'addOrUpdateRating']);
 Route::delete('/ratings', [RatingController::class, 'deleteRating']);
 
@@ -384,4 +388,5 @@ Route::delete('/products-simple/{id}', [\App\Http\Controllers\api\M_Controller::
 
 });
 
+// Route pour récupérer les posts planifiés ou non planifiés selon le paramètre is_scheduled
 
