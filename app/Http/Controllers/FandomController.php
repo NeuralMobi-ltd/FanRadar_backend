@@ -1032,7 +1032,20 @@ public function getFandomPosts($fandomId, Request $request)
             ->orderBy('created_at', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
 
-        $formatted = collect($posts->items())->map(function ($post) {
+        $authUser = Auth::user();
+        $formatted = collect($posts->items())->map(function ($post) use ($authUser) {
+            $isFavorite = false;
+            $isSaved = false;
+            if ($authUser) {
+                $isFavorite = \App\Models\Favorite::where([
+                    'user_id' => $authUser->id,
+                    'favoriteable_type' => 'App\\Models\\Post',
+                    'favoriteable_id' => $post->id
+                ])->exists();
+                if (method_exists($authUser, 'savedPosts')) {
+                    $isSaved = $authUser->savedPosts()->where('posts.id', $post->id)->exists();
+                }
+            }
             return [
                 'id' => $post->id,
                 'description' => $post->description,
@@ -1041,6 +1054,8 @@ public function getFandomPosts($fandomId, Request $request)
                 'user' => $post->user ? $post->user->toArray() : null,
                 'likes_count' => method_exists($post, 'favorites') ? $post->favorites()->count() : 0,
                 'comments_count' => method_exists($post, 'comments') ? $post->comments()->count() : 0,
+                'is_favorite' => $isFavorite,
+                'is_saved' => $isSaved,
                 'created_at' => $post->created_at ? $post->created_at->toISOString() : null,
             ];
         });

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class TagsController extends Controller
 {
@@ -118,8 +119,21 @@ class TagsController extends Controller
         ->first() ?? 'General';
 
         // Formater les posts
-        $formattedPosts = collect($posts->items())->map(function ($post) {
+        $authUser = Auth::user();
+        $formattedPosts = collect($posts->items())->map(function ($post) use ($authUser) {
             $user = $post->user;
+            $isFavorite = false;
+            $isSaved = false;
+            if ($authUser) {
+                $isFavorite = \App\Models\Favorite::where([
+                    'user_id' => $authUser->id,
+                    'favoriteable_type' => 'App\\Models\\Post',
+                    'favoriteable_id' => $post->id
+                ])->exists();
+                if (method_exists($authUser, 'savedPosts')) {
+                    $isSaved = $authUser->savedPosts()->where('posts.id', $post->id)->exists();
+                }
+            }
             return [
                 'id' => $post->id,
                 'description' => $post->description,
@@ -151,6 +165,8 @@ class TagsController extends Controller
                 'tags' => $post->tags ? $post->tags->pluck('tag_name')->toArray() : [],
                 'likes_count' => $post->favorites_count ?? 0,
                 'comments_count' => $post->comments_count ?? 0,
+                'is_favorite' => $isFavorite,
+                'is_saved' => $isSaved,
                 'feedback' => $post->feedback ?? 0,
             ];
         });
