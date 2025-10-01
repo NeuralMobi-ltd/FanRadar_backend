@@ -79,7 +79,6 @@ Route::post('/categories', [CategoryController::class, 'store']);
 Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
 Route::put('/categories/{category}', [CategoryController::class, 'update']);
 
-
 Route::post('/subcategories', [SubcategoryController::class, 'store']);
 Route::delete('/subcategories/{subcategory}', [SubcategoryController::class, 'destroy']);
 Route::put('/subcategories/{subcategory}', [SubcategoryController::class, 'update']);

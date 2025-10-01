@@ -21,6 +21,11 @@ class FandomController extends Controller
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Ce fandom n\'est plus disponible'], 403);
+        }
+
         $attrs = $fandom->toArray();
         $attrs['posts_count'] = $fandom->posts_count ?? 0;
         $attrs['members_count'] = $fandom->members_count ?? 0;
@@ -61,6 +66,11 @@ class FandomController extends Controller
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Ce fandom n\'est plus disponible'], 403);
+        }
+
         // Vérifier si l'utilisateur est déjà membre
         $existing = \App\Models\Member::where('user_id', $user->id)->where('fandom_id', $fandom->id)->first();
         if ($existing) {
@@ -93,6 +103,11 @@ class FandomController extends Controller
 
         if (!$fandom) {
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+        }
+
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Ce fandom n\'est plus disponible'], 403);
         }
 
         // Vérifier si l'utilisateur est membre du fandom
@@ -219,6 +234,7 @@ class FandomController extends Controller
             'subcategory_id' => $data['subcategory_id'] ?? null,
             'cover_image' => $data['cover_image'] ?? null,
             'logo_image' => $data['logo_image'] ?? null,
+            'isactive' => false, // Par défaut, le fandom est inactif (nécessite validation admin)
         ]);
 
         if (!$fandom) {
@@ -268,6 +284,7 @@ class FandomController extends Controller
             'name' => 'sometimes|string|max:255',
             'description' => 'sometimes|nullable|string',
             'subcategory_id' => 'sometimes|integer|exists:subcategories,id',
+            'isactive' => 'sometimes|boolean',
             'cover_image' => ['nullable', function ($attribute, $value, $fail) use ($request) {
                 if ($request->hasFile('cover_image')) {
                     $file = $request->file('cover_image');
@@ -303,6 +320,17 @@ class FandomController extends Controller
         }
 
         $data = $validator->validated();
+
+        // Vérifier si l'utilisateur essaie de modifier isactive
+        if ($request->has('isactive')) {
+            // Seuls les super admins peuvent modifier le statut isactive
+            if (!$user->isAdmin()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès refusé. Seuls les super administrateurs peuvent modifier le statut d\'activation des fandoms.'
+                ], 403);
+            }
+        }
 
         // Handle uploaded cover image: store and delete old if present and was stored locally
         if ($request->hasFile('cover_image') && $request->file('cover_image')->isValid()) {
@@ -440,6 +468,11 @@ class FandomController extends Controller
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Impossible de modifier les rôles dans ce fandom. Il n\'est plus disponible.'], 403);
+        }
+
         // Vérifier que l'utilisateur actuel est administrateur du fandom
         $currentUserMembership = \App\Models\Member::where('user_id', $user->id)
             ->where('fandom_id', $fandom->id)
@@ -516,6 +549,11 @@ class FandomController extends Controller
         $fandom = \App\Models\Fandom::find($fandom_id);
         if (!$fandom) {
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
+        }
+
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Impossible de modifier les membres de ce fandom. Il n\'est plus disponible.'], 403);
         }
 
          if (!$admin->isFandomAdmin($fandom->id) && !$admin->isFandomModerator($fandom->id) && !$admin->isAdmin()) {
@@ -604,18 +642,22 @@ class FandomController extends Controller
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
-        // Vérifier que l'utilisateur appartient au fandom (via User model)
-        if (!$user->belongsToFandom($fandom_id)) {
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Impossible d\'ajouter du contenu à ce fandom. Il n\'est plus disponible.'], 403);
+        }
+
+        // Vérifier que l'utilisateur est administrateur ou modérateur du fandom
+        if (!$user->isFandomAdmin($fandom_id) && !$user->isFandomModerator($fandom_id)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Access denied. You must be a member of this fandom to post.'
+                'message' => 'Access denied. Only fandom administrators and moderators can create posts.'
             ], 403);
         }
 
         $validated = $request->validate([
             'schedule_at' => 'nullable|date',
             'description' => 'nullable|string',
-            'content_status' => 'required|in:draft,published,archived',
             'medias' => 'nullable|array',
             'medias.*' => 'file|mimes:jpg,jpeg,png,mp4,mov|max:20480',
             'tags' => 'nullable|array',
@@ -624,6 +666,7 @@ class FandomController extends Controller
 
         $validated['user_id'] = $user->id;
         $validated['fandom_id'] = $fandom_id; // Utiliser fandom_id au lieu de subcategory_id
+        $validated['content_status'] = 'published'; // Toujours publié
         $tags = $validated['tags'] ?? [];
         unset($validated['tags']);
         $post = Post::create($validated);
@@ -704,6 +747,11 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Impossible de modifier du contenu dans ce fandom. Il n\'est plus disponible.'], 403);
+        }
+
         // Trouver le post
         $post = \App\Models\Post::where('id', $post_id)
             ->where('fandom_id', $fandom->id)
@@ -713,19 +761,17 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
             return response()->json(['success' => false, 'message' => 'Post not found in this fandom'], 404);
         }
 
-        // Vérifier si l'utilisateur est propriétaire du post
-        if (!$user->ownsPost($post)) {
+        // Vérifier si l'utilisateur est administrateur ou modérateur du fandom
+        if (!$user->isFandomAdmin($fandom->id) && !$user->isFandomModerator($fandom->id)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Access denied. You can only edit your own posts.'
+                'message' => 'Access denied. Only fandom administrators and moderators can edit posts.'
             ], 403);
         }
 
         $validated = $request->validate([
             'schedule_at' => 'nullable|date',
             'description' => 'nullable|string',
-            'content_status' => 'sometimes|in:draft,published,archived',
-
             'tags' => 'nullable|array',
             'tags.*' => 'string|max:255',
         ]);
@@ -733,8 +779,10 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
         // Mettre à jour les champs fournis
         $updateData = [];
         if ($request->has('description')) $updateData['description'] = $request->description;
-        if ($request->has('content_status')) $updateData['content_status'] = $request->content_status;
         if ($request->has('schedule_at')) $updateData['schedule_at'] = $request->schedule_at;
+
+        // Toujours forcer le statut à publié
+        $updateData['content_status'] = 'published';
 
         if (!empty($updateData)) {
             $post->update($updateData);
@@ -787,6 +835,11 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Impossible de supprimer du contenu dans ce fandom. Il n\'est plus disponible.'], 403);
+        }
+
         // Trouver le post
         $post = \App\Models\Post::where('id', $post_id)
             ->where('fandom_id', $fandom->id)
@@ -796,18 +849,11 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
             return response()->json(['success' => false, 'message' => 'Post not found in this fandom'], 404);
         }
 
-        // Vérifier les permissions via User model
-        $canDelete = false;
-        if ($user->ownsPost($post)) {
-            $canDelete = true; // Propriétaire du post
-        } elseif ($user->isFandomAdmin($fandom->id) || $user->isFandomModerator($fandom->id)) {
-            $canDelete = true; // Admin ou modérateur du fandom
-        }
-
-        if (!$canDelete) {
+        // Vérifier si l'utilisateur est administrateur ou modérateur du fandom
+        if (!$user->isFandomAdmin($fandom->id) && !$user->isFandomModerator($fandom->id)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Access denied. You can only delete your own posts or you must be an admin/moderator.'
+                'message' => 'Access denied. Only fandom administrators and moderators can delete posts.'
             ], 403);
         }
 
@@ -831,7 +877,8 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
         $user = Auth::user();
 
         // Charger la relation subcategory avec sa category et le nombre de posts/members pour éviter les N+1
-        $fandoms = \App\Models\Fandom::with(['subcategory.category'])->withCount(['posts', 'members'])->get();
+        // Filtrer seulement les fandoms actifs
+        $fandoms = \App\Models\Fandom::where('isactive', true)->with(['subcategory.category'])->withCount(['posts', 'members'])->get();
 
         // Obtenir les rôles de l'utilisateur pour tous les fandoms s'il est authentifié
         $userMemberships = [];
@@ -887,7 +934,8 @@ public function updatePostInFandom($fandom_id, $post_id, Request $request)
         $q = $request->get('q', '');
 
         // base query: eager load subcategory and include counts
-        $query = \App\Models\Fandom::with('subcategory')->withCount(['posts', 'members']);
+        // Filtrer seulement les fandoms actifs
+        $query = \App\Models\Fandom::where('isactive', true)->with('subcategory')->withCount(['posts', 'members']);
 
         if (!empty($q)) {
             // recherche sur le nom et la description
@@ -955,7 +1003,9 @@ public function getFandomsByCategory($category_id, Request $request)
         $subcategoryIds = \App\Models\Subcategory::where('category_id', $category_id)->pluck('id');
 
         // Récupérer les fandoms liés à ces subcategories avec pagination
-        $fandomsQuery = \App\Models\Fandom::with('subcategory')
+        // Filtrer seulement les fandoms actifs
+        $fandomsQuery = \App\Models\Fandom::where('isactive', true)
+            ->with('subcategory')
             ->withCount(['posts', 'members'])
             ->whereIn('subcategory_id', $subcategoryIds)
             ->orderBy('members_count', 'desc'); // Trier par popularité
@@ -1026,6 +1076,11 @@ public function getFandomPosts($fandomId, Request $request)
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Ce fandom n\'est plus disponible'], 403);
+        }
+
         $posts = \App\Models\Post::where('fandom_id', $fandomId)
             ->where('content_status', 'published')
             ->with(['medias', 'tags', 'user'])
@@ -1086,6 +1141,11 @@ public function getFandomPosts($fandomId, Request $request)
             return response()->json(['success' => false, 'message' => 'Fandom not found'], 404);
         }
 
+        // Vérifier si le fandom est actif
+        if (!$fandom->isactive) {
+            return response()->json(['success' => false, 'message' => 'Ce fandom n\'est plus disponible'], 403);
+        }
+
         // join members with users to get user info and role
         $membersQuery = \App\Models\Member::where('fandom_id', $fandomId)->with('user');
 
@@ -1138,7 +1198,9 @@ public function getFandomPosts($fandomId, Request $request)
         $user = Auth::user();
 
         // Recherche dans les fandoms par nom, description
-        $fandoms = \App\Models\Fandom::where(function($q) use ($query) {
+        // Filtrer seulement les fandoms actifs
+        $fandoms = \App\Models\Fandom::where('isactive', true)
+            ->where(function($q) use ($query) {
                 $q->where('name', 'LIKE', "%{$query}%")
                   ->orWhere('description', 'LIKE', "%{$query}%");
             })
@@ -1205,7 +1267,9 @@ public function getFandomPosts($fandomId, Request $request)
     {
         try {
             // Récupérer tous les fandoms avec le nombre de membres et de posts, triés par nombre de membres décroissant
-            $fandoms = \App\Models\Fandom::withCount(['members', 'posts'])
+            // Filtrer seulement les fandoms actifs
+            $fandoms = \App\Models\Fandom::where('isactive', true)
+                ->withCount(['members', 'posts'])
                 ->orderByDesc('members_count')
                 ->get();
 
@@ -1296,7 +1360,9 @@ public function getFandomPosts($fandomId, Request $request)
         }
 
         // Récupérer les fandoms de toutes les sous-catégories avec pagination
-        $fandoms = \App\Models\Fandom::whereIn('subcategory_id', $subcategoryIds)
+        // Filtrer seulement les fandoms actifs
+        $fandoms = \App\Models\Fandom::where('isactive', true)
+            ->whereIn('subcategory_id', $subcategoryIds)
             ->with([
                 'subcategory:id,name,category_id'
             ])

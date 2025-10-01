@@ -15,7 +15,20 @@ class Fandom extends Model
         'subcategory_id',
         'cover_image',
         'logo_image',
+        'isactive',
     ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'isactive' => 'boolean',
+        ];
+    }
 
     public function subcategory()
     {
