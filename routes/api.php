@@ -283,6 +283,9 @@ Route::post('admin/users', [\App\Http\Controllers\api\M_Controller::class, 'addU
 Route::put('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'updateUser']);
 Route::delete('admin/users/{id}', [\App\Http\Controllers\api\M_Controller::class, 'deleteUser']);
 
+// Admin - Gestion des fandoms (afficher tous les fandoms avec filtre)
+Route::get('admin/fandoms', [FandomController::class, 'adminGetAllFandoms']);
+
 
 
 

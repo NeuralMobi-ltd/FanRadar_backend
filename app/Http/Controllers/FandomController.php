@@ -1452,4 +1452,89 @@ public function getFandomPosts($fandomId, Request $request)
         ]);
     }
 
+    /**
+     * API Admin : Afficher les fandoms inactifs par défaut avec possibilité de filtrer
+     * Paramètres:
+     * - isactive: optional boolean (true/false) pour filtrer par statut
+     * - page: numéro de page (défaut: 1)
+     * - limit: nombre d'éléments par page (défaut: 20, max: 100)
+     */
+    public function adminGetAllFandoms(Request $request)
+    {
+        $user = Auth::user();
+
+        // Vérifier si l'utilisateur est un super admin
+        if (!$user || !$user->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Seuls les super administrateurs peuvent accéder à cette ressource.'
+            ], 403);
+        }
+
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = min(100, max(1, (int) $request->get('limit', 20)));
+
+        // Paramètre de filtrage optionnel pour isactive
+        $isactiveFilter = $request->query('isactive',null);
+
+
+        // Query de base - par défaut afficher seulement les fandoms inactifs
+        $query = \App\Models\Fandom::with(['subcategory.category'])
+            ->withCount(['posts', 'members']);
+
+        // Appliquer le filtre
+        if ($isactiveFilter !== null) {
+            // Convertir en booléen
+            $isActive = filter_var($isactiveFilter, FILTER_VALIDATE_BOOLEAN);
+            $query->where('isactive', $isActive);
+        }
+
+        // Trier par date de création décroissante
+        $fandoms = $query->orderBy('created_at', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // Formater les données
+        $formattedFandoms = $fandoms->getCollection()->map(function ($fandom) {
+            $attrs = $fandom->toArray();
+            $attrs['posts_count'] = $fandom->posts_count ?? 0;
+            $attrs['members_count'] = $fandom->members_count ?? 0;
+
+            // Simplifier subcategory et ajouter category
+            if (isset($attrs['subcategory']) && is_array($attrs['subcategory'])) {
+                $category = $attrs['subcategory']['category'] ?? null;
+                $attrs['subcategory'] = [
+                    'id' => $attrs['subcategory']['id'] ?? null,
+                    'name' => $attrs['subcategory']['name'] ?? null,
+                ];
+                $attrs['category'] = $category ? [
+                    'id' => $category['id'] ?? null,
+                    'name' => $category['name'] ?? null,
+                    'image' => $category['image'] ?? null,
+                    'description' => $category['description'] ?? null,
+                ] : null;
+            }
+
+            return $attrs;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'fandoms' => $formattedFandoms,
+                'pagination' => [
+                    'current_page' => $fandoms->currentPage(),
+                    'last_page' => $fandoms->lastPage(),
+                    'per_page' => $fandoms->perPage(),
+                    'total' => $fandoms->total(),
+                    'has_more' => $fandoms->hasMorePages(),
+                    'from' => $fandoms->firstItem(),
+                    'to' => $fandoms->lastItem()
+                ],
+                'filters_applied' => [
+                    'isactive' => $isactiveFilter !== null ? filter_var($isactiveFilter, FILTER_VALIDATE_BOOLEAN) : false
+                ]
+            ]
+        ]);
+    }
+
 }
