@@ -39,6 +39,7 @@ Route::get('Y/categories', [CategoryController::class, 'getAllCategories']);
 Route::get('/subcategories', [SubcategoryController::class, 'index']);
 Route::get('/subcategories/{subcategory}', [SubcategoryController::class, 'show']);
 // ========== ROUTES PUBLIQUES POUR E-COMMERCE ==========
+Route::get('Y/hashtags/trending', [TagsController::class, 'getTrendingHashtags']);
 
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -226,7 +227,6 @@ Route::get('Y/search/products', [ProductController::class, 'searchProducts']);
 Route::get('Y/subcategories/{subcategory}/content', [SubcategoryController::class, 'getSubcategoryContent']);
 Route::get('Y/subcategories/{subcategory_id}/fandoms', [SubcategoryController::class, 'getSubcategoryFandoms']);
 
-Route::get('Y/hashtags/trending', [TagsController::class, 'getTrendingHashtags']);
 Route::get('Y/hashtags/{hashtag_id}/posts', [TagsController::class, 'getHashtagPosts']);
 Route::get('Y/fandoms/trending/top', [FandomController::class, 'getTrendingFandoms']);
 
