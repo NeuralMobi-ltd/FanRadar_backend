@@ -69,7 +69,7 @@ class CategoryController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|nullable|string|max:1000',
-            'image' => 'sometimes|nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'image' => 'sometimes|nullable|image|file|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
         $updateData = [];
