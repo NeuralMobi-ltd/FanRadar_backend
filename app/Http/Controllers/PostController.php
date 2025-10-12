@@ -251,7 +251,7 @@ class PostController extends Controller
                         'email' => $targetUser->email,
                         'profile_image' => $targetUser->profile_image,
                         'bio' => $targetUser->bio,
-                        'is_following' => $isFollowing,
+                        'is_followed' => $isFollowing,
                     ],
                     'posts' => $formattedPosts,
                     'pagination' => [
