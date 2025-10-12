@@ -187,6 +187,23 @@ class PostController extends Controller
 
             $authUser = Auth::user();
 
+            // Récupérer l'utilisateur concerné
+            $targetUser = \App\Models\User::find($userId);
+            if (!$targetUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            // Vérifier si l'utilisateur authentifié suit cet utilisateur
+            $isFollowing = false;
+            if ($authUser && $authUser->id !== $targetUser->id) {
+                $isFollowing = \App\Models\Follow::where('follower_id', $authUser->id)
+                    ->where('following_id', $targetUser->id)
+                    ->exists();
+            }
+
             $posts = Post::where('user_id', $userId)
                 ->where('content_status', 'published')
                 ->with(['medias', 'tags'])
@@ -226,6 +243,16 @@ class PostController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => [
+                    'user' => [
+                        'id' => $targetUser->id,
+                        'first_name' => $targetUser->first_name,
+                        'last_name' => $targetUser->last_name,
+                        'full_name' => trim($targetUser->first_name . ' ' . $targetUser->last_name),
+                        'email' => $targetUser->email,
+                        'profile_image' => $targetUser->profile_image,
+                        'bio' => $targetUser->bio,
+                        'is_following' => $isFollowing,
+                    ],
                     'posts' => $formattedPosts,
                     'pagination' => [
                         'page' => $posts->currentPage(),
