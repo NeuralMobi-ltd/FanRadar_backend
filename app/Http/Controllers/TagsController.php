@@ -9,17 +9,14 @@ class TagsController extends Controller
 {
     public function getTrendingHashtags(Request $request) {
         $limit = min(50, max(1, (int) $request->get('limit', 10)));
-        $days = max(1, (int) $request->get('days', 7)); // Trending sur les X derniers jours
 
-        // Calculer la date de début
-        $startDate = now()->subDays($days);
+
 
         // Récupérer les hashtags les plus utilisés dans les posts récents
-        $trendingTags = \App\Models\Tag::withCount(['posts' => function($query) use ($startDate) {
-                $query->where('posts.content_status', 'published')
-                      ->where('posts.created_at', '>=', $startDate);
+        $trendingTags = \App\Models\Tag::withCount(['posts' => function($query)  {
+                $query->where('posts.content_status', 'published');
             }])
-            ->having('posts_count', '>', 0)
+           
             ->orderByDesc('posts_count')
             ->limit($limit)
             ->get();
