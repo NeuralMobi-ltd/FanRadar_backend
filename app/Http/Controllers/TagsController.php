@@ -8,15 +8,15 @@ use Illuminate\Support\Facades\Auth;
 class TagsController extends Controller
 {
     public function getTrendingHashtags(Request $request) {
+
         $limit = min(50, max(1, (int) $request->get('limit', 10)));
 
-
-
         // Récupérer les hashtags les plus utilisés dans les posts récents
+        // Filtrer seulement les hashtags qui ont au moins 1 post publié
         $trendingTags = \App\Models\Tag::withCount(['posts' => function($query)  {
                 $query->where('posts.content_status', 'published');
             }])
-           
+            ->having('posts_count', '>', 0) // Au moins 1 post
             ->orderByDesc('posts_count')
             ->limit($limit)
             ->get();
